@@ -29,7 +29,7 @@ test('only an explicitly supplied local fixture uses content capture when Electr
 });
 test('Windows native backend compiles and encodes signed wheel deltas correctly without sending input', { skip: process.platform !== 'win32' }, async () => {
   const { NATIVE } = require('./computer-use/windows.cjs');
-  const { runPowerShell } = require('./app-source/dist-electron/electron/agent/platform/windowsShell.js');
+  const { runPowerShell } = require('../dist-electron/electron/agent/platform/windowsShell.js');
   const result = await runPowerShell(NATIVE.slice(0, NATIVE.indexOf('$h=[IntPtr]')) + `
 $packet=[PetComputer]::MousePacket(0x800,-120)
 $horizontal=[PetComputer]::MousePacket(0x1000,240)
@@ -39,7 +39,7 @@ $horizontal=[PetComputer]::MousePacket(0x1000,240)
 });
 test('PowerShell executes the real Win modifier press/release branches with SendInput replaced by a recorder', { skip: process.platform !== 'win32' }, async () => {
   const { SYSTEM_KEY } = require('./computer-use/windows.cjs');
-  const { runPowerShell } = require('./app-source/dist-electron/electron/agent/platform/windowsShell.js');
+  const { runPowerShell } = require('../dist-electron/electron/agent/platform/windowsShell.js');
   let script = SYSTEM_KEY.replace('public class PetComputer {', 'public class PetComputer { public static System.Collections.Generic.List<INPUT> Sent = new System.Collections.Generic.List<INPUT>();');
   const send = 'if(SendInput(1,new INPUT[]{input},Marshal.SizeOf(typeof(INPUT)))!=1) throw new Exception("Windows 拒绝输入（可能是 UAC 或权限等级不同），没有尝试绕过");';
   assert.ok(script.includes(send));

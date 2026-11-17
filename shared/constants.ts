@@ -42,6 +42,8 @@ export const IPC = {
   agentPlugins: 'agent:plugins',
   agentOpenFolder: 'agent:open-folder',
   agentEvent: 'evt:agent',
+  /** chat -> main: a slash command (/help, /resume…), answered without a model turn. */
+  agentCommand: 'agent:command',
   // user-made characters
   charactersList: 'characters:list',
   charactersOpenFolder: 'characters:open-folder',

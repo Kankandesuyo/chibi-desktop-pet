@@ -43,7 +43,71 @@
 | llm | `electron/agent/llm.ts` | 流式 tool_calls 解析、文本协议、视觉模型调用 |
 | 平台层 | `electron/agent/platform/` | Electron + PowerShell/UI Automation 的 Windows 实现 |
 
-所有 Agent 代码都在主进程。页面（聊天窗口）只能：发起任务、停止任务、回答确认。API Key 从不离开主进程。
+| SessionStore | `electron/agent/SessionStore.ts` | 事件溯源的会话日志 `sessions/<id>.jsonl`；崩溃修复；`/resume` 的来源 |
+| TurnHooks | `electron/agent/TurnHooks.ts` | 每个回合的生命周期事件；内置功能都挂在这里 |
+| 内置插件 | `electron/agent/turnPlugins.ts` | 会话日志、跨轮摘要（含 `/resume`）、上下文压缩 |
+| 斜杠命令 | `electron/agent/commands.ts` | `/help /new /resume /status /tools`，不经过模型 |
+
+所有 Agent 代码都在主进程。页面（聊天窗口）只能：发起任务、停止任务、回答确认、发斜杠命令。API Key 从不离开主进程。
+
+## 运行时内核（Harness 第 1 阶段）
+
+设计见 [HARNESS.md](HARNESS.md)。参考 DeepSeek Harness 的回合模型和 Claude Code 的命令。
+
+- **回合与步骤**：一次请求是一个回合（turn）；一次模型调用加上它要的工具是一个步骤（step）。
+  ```text
+  turn/start → [ step/pre → 模型 → assistant/message → tool/pre … tool/post ]* → turn/end
+  ```
+  `TurnHooks.on(事件, 名字, 函数)` 就能挂上去，返回值用来取消挂载。
+  - `tool/pre` 是**守卫**：返回 `{ deny: '原因' }` 就拦下这一步，第一个拒绝生效，后面的监听器改不回来；守卫自己出错也算拒绝（宁可不做）。
+  - 其他事件的监听器出错只记日志，不影响任务。
+  - 内置的会话日志、跨轮摘要、上下文压缩都是这样挂上去的插件，循环本身不再包含它们。
+- **会话日志**：`%APPDATA%\chibi-desktop-pet\agent\sessions\<本地时间>-xxxx.jsonl`，只追加不改写，内容已脱敏。
+  - 事件：`session/start`、`turn/start`、`step/start`、`assistant/message`、`tool/result`、`compaction`、`turn/end`（带结束原因 `completed | aborted | error | max-steps | interrupted`）。
+  - 启动时，没有 `turn/end` 的回合（程序退出或崩溃时正在做的）会补记为 `interrupted`。
+  - 跨轮摘要从日志重建，所以重启后“刚才那个文件夹”也能接上。
+  - 单个文件超过 5MB 会自动换新文件。
+- **并行**：工具定义里 `concurrencySafe: true`、低风险、且从不询问用户的，同一步里相邻的几个会同时执行（例如一次查好几个文件夹）；其余的单独、按顺序执行。结果按模型请求的顺序交回。内置的 16 个只读查询工具已标记；`read_file` 因为读敏感文件时要确认，不标。
+- **斜杠命令**（在聊天框输入，直接执行，不经过模型，也不进聊天记录）：
+  - `/help`：看有哪些命令
+  - `/new`（`/clear`）：开始新会话，清空聊天，之前的任务不再带入
+  - `/resume`：接着做上一个没做完的任务（程序退出、被停止、出错或到步骤上限的），会把已经做过的步骤告诉她，避免重复写操作
+  - `/status`：看当前会话和她的状态
+  - `/tools`：看她现在能用的工具
+
+  只有开头是 `/英文单词` 的才算命令，所以“/r/xxx 是什么”这种仍然按普通消息发给她。聊天窗口、远程网页和命令行都能用。
+
+## 系统级运行时（Harness 第 2 阶段）
+
+- **会话就是对话**：聊天窗口和远程网页看到的对话（`chat/message` 事件）、发给模型的历史、`/resume`、轨迹，全部来自同一个会话日志。
+  - 切换会话时，这些会一起切换。“新会话”和 `/new` 都是开一个新会话，旧的留在左边列表里，不再删除。
+  - 程序重启后，打开的是上次正在用的那个会话（记在 `sessions/current` 里）。
+  - 升级后第一次启动，会把旧的 `remote-chat/shared-history.json`（没有的话就用 `config.json` 里的聊天记录）导入一次，用 `sessions/.imported-shared-history` 标记，旧文件原样保留不删。
+- **remote-chat 并入源码**：网页服务、登录、共享对话、图片分析、Computer Use、视觉客户端都打包进程序里，由 `electron/remote.ts` 直接启动；`install.py` / `desktop_patch.py` 已删除。
+  - 原来补丁做的改动都写进了源码：自定义性格优先、回复风格、Win 键改走 `computer_system_key`、无障碍滚动失败时改走视觉滚动、微信不重复启动（`tools/appReuse.ts`）、视觉请求可带 JSON 模式。
+  - Computer Use 的规则改为通过 `turn/start` 钩子加进系统提示，不再替换 `systemPrompt`。
+- **统一的本地接口**：网页服务（`127.0.0.1:17861`）现在也给命令行用。
+  - 新增 `/api/sessions`、`/api/sessions/open`、`/api/sessions/new`、`/api/trajectory`、`/api/command`。
+  - 命令行使用 `%APPDATA%\chibi-desktop-pet\remote-chat\cli-token.txt` 里的令牌，只在 127.0.0.1 上有效，从外网隧道进来的请求不认这个令牌。
+- **命令行 `pet`**（程序文件夹里的 `pet.cmd`，需要 Node.js）：
+  - `pet 帮我整理下载文件夹`：发消息，并跟着任务进度走；需要确认时会在命令行里问你，直接回车或没有输入都算拒绝。
+  - `pet /status`、`pet sessions`、`pet open <会话ID>`、`pet new`、`pet stop`。
+- **用量统计**：流式请求会带上 `stream_options.include_usage`；接口不认这个参数时，会自动去掉再发，并记住这个接口不支持。
+  - 每个回合记录：步骤数、工具调用次数、模型耗时、工具耗时、输入和输出 token、缓存命中（DeepSeek 的 `prompt_cache_hit_tokens`）。这些写在 `turn/end` 事件里。
+- **权限模式**（聊天输入框左下角可以切换）：
+  - **询问**：默认模式。
+  - **自动允许中风险**：等于原来的“自动允许中风险操作”。
+  - **只读**：新增，是一个 `tool/pre` 守卫，只放行查看类工具，插件和 MCP 工具一律不放行；同时在系统提示里告诉她现在是只读模式。
+  - 无论哪种模式，高风险操作都会逐次确认。
+- **开机启动**：设置里的“开机启动”，默认关闭。
+- **聊天窗口**：采用 harness 式布局。
+  - 左边是会话列表（按今天、昨天、最近 7 天、更早分组），可以收起。
+  - 每次工具调用显示为一行，点开能看到详情。
+  - 确认请求以许可卡片的形式显示在对话里，计划显示为清单。
+  - “轨迹”标签页按回合列出每一次模型请求（包括参数）和工具结果（包括数据），每一条都能展开原始数据。
+  - 输入框里打 `/` 会弹出命令补全。
+  - 底部状态栏显示回合数、步骤数、耗时、token 和缓存命中率。
+  - 她的名字、头像、配色和语气都不变。
 
 ## 内置工具（63 个）
 

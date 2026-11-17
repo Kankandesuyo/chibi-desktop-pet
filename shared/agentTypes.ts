@@ -12,6 +12,8 @@ export interface AgentSettings {
   enabled: boolean;
   /** Medium-risk tools run without asking. High-risk tools ALWAYS ask, whatever this says. */
   autoApproveMedium: boolean;
+  /** Read-only mode: only tools that just look may run (she can investigate and plan, not change anything). */
+  readOnly: boolean;
   /** Extra folders the agent may work in, on top of the user's standard folders. */
   allowedRoots: string[];
   /** Every drive is reachable; system folders become high-risk (ask every time) instead of off-limits. */
@@ -80,6 +82,9 @@ export interface TaskRecord {
   toolCalls: number;
   summary?: string;
 }
+
+/** Answer to a chat slash command (/help, /resume…). `action` tells the chat what to do next. */
+export interface AgentCommandResult { reply: string; action?: 'clear' | 'send'; prompt?: string }
 
 export interface ToolInfo { name: string; group: ToolGroup | 'internal'; risk: RiskLevel; description: string; source: string }
 

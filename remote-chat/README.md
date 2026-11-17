@@ -16,7 +16,7 @@
 - `public/` 是手机看到的网页，包含原桌宠角色素材和响应式聊天界面。
 - `server.cjs` 是连接网页与桌宠的桥梁，运行于原有 Electron 主进程；请求交给已经创建的 `agent.controller`，并实时更新网页。AI 关闭时报错，Agent 关闭时使用原有普通聊天功能。
 - 浏览器通过长轮询接收逐步回复，避免 Quick Tunnel 不支持 SSE 的问题。网络暂断会自动重连；重连后恢复电脑端仍在运行的任务状态。
-- `install.py` 向原 `main.js` 添加桥梁启动入口，并通过 `desktop_patch.py` 为 preload 和编译后的桌面聊天界面添加受限的共享会话 IPC。补丁检查唯一标记，遇到不兼容版本会停止，不盲目替换。首次原始 ASAR 备份在 `backups/app.original.asar`；每次安装还会按当前包的 SHA256 保存 `backups/app.before-remote-<SHA256>.asar`，用于恢复本次更新前的版本。安装时验证备份、补丁完整性、重复执行一致性及重建文件内容；可先运行 `python remote-chat/install.py --check`，只检查不安装。`resources/app.asar.new` 保留原样，运行旧“更新桌宠.bat”会覆盖入口，更新后需重新检查并运行安装脚本。
+- **（2026-11-18 起）已并入桌宠源码**：这些运行文件打包在程序里，由 `electron/remote.ts` 启动；以前的 `install.py` / `desktop_patch.py` 打补丁流程已删除，更新桌宠时不需要再打补丁。共享对话改存在桌宠的会话日志里（第一次启动时导入一次 `shared-history.json`，旧文件保留）。见 `docs/AGENT.md` 的“系统级运行时”。
 - `server.test.cjs` 使用模拟 Agent 验证权限和会话协议；真实模型与浏览器验收另见 `VALIDATION.md`。
 - 运行数据在 `%APPDATA%\chibi-desktop-pet\remote-chat`。`shared-history.json` 保存最近 200 条共享消息，原 `config.json` 镜像最近 40 条。第一次升级会备份并合并桌面与网页旧记录；旧桌面消息没有时间戳，保持其原顺序，再接入网页记录。`before-sync-migration.json` 保留升级前两份记录，旧 `history.json` 不覆盖。中断中的回复不做跨程序重启恢复。
 
@@ -86,4 +86,4 @@
 
 03:38 的包缺失远程启动入口，前端变为 `index-CkT8DJ8x.js`。已适配、备份当前包并重新安装；保留原包的文件清单及未涉及补丁的资源。安装前先从桌宠菜单“退出程序”，避免 Windows 文件锁导致替换失败，然后运行 `python remote-chat/install.py`，启动桌宠并双击根目录“启动远程聊天.bat”。不要用首次原版备份覆盖新版来恢复远程功能。
 
-回归检查：`python -m unittest discover -s remote-chat -p test_install.py`；服务与权限测试：`node --test remote-chat/*.test.cjs`。
+服务与权限测试：`npm run test:remote`（先编译主进程，再运行 `remote-chat/*.test.cjs`）。

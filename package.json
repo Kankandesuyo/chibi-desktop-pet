@@ -12,7 +12,8 @@
     "build": "npm run typecheck && npm run build:electron && npm run build:renderer",
     "start": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit && tsc -p tsconfig.agent-tests.json",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:remote",
+    "test:remote": "npm run build:electron && node --test \"remote-chat/*.test.cjs\"",
     "dist": "npm run build && electron-builder --win nsis --x64",
     "smoke": "npm run build && cross-env PET_SMOKE_DIR=./smoke-out electron .",
     "pack": "npm run build && electron-builder --win dir --x64"
@@ -44,9 +45,20 @@
     "files": [
       "dist/**",
       "dist-electron/**",
+      "remote-chat/*.cjs",
+      "!remote-chat/*.test.cjs",
+      "remote-chat/computer-use/*.cjs",
+      "remote-chat/public/**",
+      "remote-chat/tests/computer-use.html",
+      "remote-chat/tests/input-regression.html",
+      "remote-chat/tests/input-regression.manual.cjs",
       "build/icon.png",
       "build/icon-deepseek.png",
       "package.json"
+    ],
+    "extraFiles": [
+      { "from": "tools/pet-cli.cjs", "to": "pet-cli.cjs" },
+      { "from": "tools/pet.cmd", "to": "pet.cmd" }
     ],
     "win": {
       "target": [

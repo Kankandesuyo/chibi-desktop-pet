@@ -115,7 +115,18 @@ $('login-form').addEventListener('submit', async e => {
 $('message-form').addEventListener('submit', async e => {
   e.preventDefault(); const text = $('message').value.trim(); if ((!text && !selectedImage) || pending || state?.active) return;
   pending = true; $('send').disabled = true; notice();
-  try { await api('/api/message', { text, ...(selectedImage ? { image: { name: selectedImage.name, dataUrl: selectedImage.dataUrl } } : {}) }); $('message').value = ''; $('message').style.height = ''; clearSelectedImage(); }
+  try {
+    // Slash commands (/status, /resume, /new …) are answered by the pet without a model turn.
+    if (!selectedImage && /^\/\S/.test(text)) {
+      const r = await api('/api/command', { text });
+      if (!r.notCommand) {
+        $('message').value = ''; $('message').style.height = ''; notice(r.reply);
+        if (r.action === 'send' && r.prompt) await api('/api/message', { text: r.prompt });
+        return;
+      }
+    }
+    await api('/api/message', { text, ...(selectedImage ? { image: { name: selectedImage.name, dataUrl: selectedImage.dataUrl } } : {}) }); $('message').value = ''; $('message').style.height = ''; clearSelectedImage();
+  }
   catch (err) { notice(err.message); }
   finally { pending = false; $('send').disabled = !!state?.active; $('image-pick').disabled = !!state?.active; }
 });

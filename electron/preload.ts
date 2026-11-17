@@ -18,6 +18,7 @@ const C = {
   charactersList: 'characters:list', charactersOpenFolder: 'characters:open-folder', charactersReloadPet: 'characters:reload-pet',
   charactersCreate: 'characters:create',
   filesDropped: 'pet:files-dropped', chatTakeCompose: 'chat:take-compose', cursor: 'evt:cursor', chatCompose: 'evt:chat-compose',
+  agentCommand: 'agent:command',
 } as const;
 
 function listen<T>(channel: string) {
@@ -57,7 +58,19 @@ const api: PetAPI = {
   agentMemory: (op) => ipcRenderer.invoke(C.agentMemory, op),
   agentPickFolder: () => ipcRenderer.invoke(C.agentPickFolder),
   agentPlugins: (op) => ipcRenderer.invoke(C.agentPlugins, op),
+  sessionsList: () => ipcRenderer.invoke('chat:sessions'),
+  sessionOpen: (id) => ipcRenderer.invoke('chat:session-open', id),
+  sessionNew: () => ipcRenderer.invoke('chat:session-new'),
+  trajectory: () => ipcRenderer.invoke('chat:trajectory'),
+  petAvatar: () => ipcRenderer.invoke('pet:avatar'),
+  // One shared conversation for the desktop chat and the remote web page (owned by remote-chat/server.cjs).
+  sharedState: () => ipcRenderer.invoke('chat:shared-state'),
+  sharedSend: (text) => ipcRenderer.invoke('chat:shared-send', text),
+  sharedAbort: () => ipcRenderer.invoke('chat:shared-abort'),
+  sharedClear: () => ipcRenderer.invoke('chat:shared-clear'),
+  onSharedChat: listen('evt:shared-chat'),
   agentOpenFolder: (kind) => ipcRenderer.send(C.agentOpenFolder, kind),
+  agentCommand: (text) => ipcRenderer.invoke(C.agentCommand, text),
   onAgentEvent: listen(C.agentEvent),
   listCharacters: () => ipcRenderer.invoke(C.charactersList),
   openCharactersFolder: () => ipcRenderer.send(C.charactersOpenFolder),

@@ -10,7 +10,10 @@ export type LlmMessage =
   | { role: 'assistant'; content: string | null; tool_calls?: LlmToolCall[]; reasoning_content?: string }
   | { role: 'tool'; tool_call_id: string; content: string };
 
-export interface LlmTurn { content: string; toolCalls: LlmToolCall[]; finishReason: string | null; reasoning: string }
+/** Token use reported by the endpoint (only when it supports streaming usage). */
+export interface LlmUsage { input: number; output: number; cached?: number }
+
+export interface LlmTurn { content: string; toolCalls: LlmToolCall[]; finishReason: string | null; reasoning: string; usage?: LlmUsage }
 
 export interface LlmRequest {
   messages: LlmMessage[];
@@ -55,6 +58,7 @@ export function createTurnParser(): { feed(chunk: string): string[]; finish(): L
   let content = '';
   let reasoning = '';
   let finishReason: string | null = null;
+  let usage: LlmUsage | undefined;
   const calls = new Map<number, { id: string; name: string; args: string }>();
   return {
     feed(chunk) {
@@ -67,8 +71,9 @@ export function createTurnParser(): { feed(chunk: string): string[]; finish(): L
         if (!line.startsWith('data:')) continue;
         const payload = line.slice(5).trim();
         if (payload === '[DONE]') { finished = true; continue; }
-        let json: { choices?: { delta?: Record<string, unknown>; finish_reason?: string | null }[] };
+        let json: { choices?: { delta?: Record<string, unknown>; finish_reason?: string | null }[]; usage?: Record<string, unknown> | null };
         try { json = JSON.parse(payload); } catch { continue; }
+        if (json.usage && typeof json.usage === 'object') usage = readUsage(json.usage);
         const choice = json.choices?.[0];
         if (!choice) continue;
         if (choice.finish_reason) finishReason = choice.finish_reason;
@@ -92,10 +97,21 @@ export function createTurnParser(): { feed(chunk: string): string[]; finish(): L
       const toolCalls: LlmToolCall[] = [...calls.entries()].sort(([a], [b]) => a - b)
         .filter(([, c]) => c.name)
         .map(([i, c]) => ({ id: c.id || `call_${i}_${Date.now().toString(36)}`, type: 'function', function: { name: c.name, arguments: c.args } }));
-      return { content, toolCalls, finishReason, reasoning };
+      return { content, toolCalls, finishReason, reasoning, ...(usage ? { usage } : {}) };
     },
     done: () => finished,
   };
+}
+
+/** OpenAI style usage, with DeepSeek's / OpenAI's names for cached prompt tokens. */
+function readUsage(u: Record<string, unknown>): LlmUsage | undefined {
+  const n = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const input = n(u.prompt_tokens);
+  const output = n(u.completion_tokens);
+  if (input === undefined && output === undefined) return undefined;
+  const details = (u.prompt_tokens_details ?? {}) as Record<string, unknown>;
+  const cached = n(u.prompt_cache_hit_tokens) ?? n(details.cached_tokens);
+  return { input: input ?? 0, output: output ?? 0, ...(cached !== undefined ? { cached } : {}) };
 }
 
 async function post(cfg: EndpointConfig, body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
@@ -121,6 +137,8 @@ async function post(cfg: EndpointConfig, body: Record<string, unknown>, signal: 
 export class OpenAiCompatibleClient implements LlmClient {
   /** Highest max_tokens this endpoint accepted after rejecting a bigger one (per base URL + model). */
   private readonly tokenCaps = new Map<string, number>();
+  /** Endpoints that rejected stream_options (they then simply report no usage). */
+  private readonly noStreamUsage = new Set<string>();
 
   constructor(private readonly config: () => EndpointConfig) {}
 
@@ -131,11 +149,15 @@ export class OpenAiCompatibleClient implements LlmClient {
     let res: Response;
     for (;;) {
       const body: Record<string, unknown> = { stream: true, temperature: 0.3, max_tokens: maxTokens, messages: req.messages };
+      if (!this.noStreamUsage.has(capKey)) body.stream_options = { include_usage: true };
       if (req.tools && req.tools.length) { body.tools = req.tools; body.tool_choice = 'auto'; }
       res = await post(cfg, body, req.signal);
-      if (res.ok || res.status !== 400) break;
-      // Some endpoints reject a max_tokens above their limit: retry once with what they accept.
+      if (res.ok || (res.status !== 400 && res.status !== 422)) break;
       const text = await res.clone().text().catch(() => '');
+      // Usage reporting is optional: an endpoint that does not know stream_options gets the request without it.
+      if (body.stream_options && /stream_options|include_usage/i.test(text)) { this.noStreamUsage.add(capKey); continue; }
+      if (res.status !== 400) break;
+      // Some endpoints reject a max_tokens above their limit: retry once with what they accept.
       const lower = maxTokensLimitFrom(text, maxTokens);
       if (lower === null) break;
       maxTokens = lower;

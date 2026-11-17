@@ -1,8 +1,9 @@
 import type { CharacterId, CustomCharacterInfo, ThemeChoice } from './characters';
 import type { MonologueLevel } from './persona';
 import type { ChatCompose } from './fileDrop';
+import type { SessionStatsView, SessionSummary, TrajectoryEvent } from './harness';
 /** Types and constants shared by the Electron main process and the renderer. */
-import type { AgentEvent, AgentInfo, AgentPetSignal, AgentSettings, AgentStepView, ConfirmDecision, ConfirmRequest, McpServerConfig, PlanStepView } from './agentTypes';
+import type { AgentCommandResult, AgentEvent, AgentInfo, AgentPetSignal, AgentSettings, AgentStepView, ConfirmDecision, ConfirmRequest, McpServerConfig, PlanStepView } from './agentTypes';
 
 export const PET_STATES = [
   'idle', 'blink', 'lookAround', 'walkLeft', 'walkRight', 'run', 'turnLeft', 'turnRight', 'jump',
@@ -147,6 +148,8 @@ export interface PetAPI {
   agentPickFolder(): Promise<string | null>;
   agentPlugins(op: { type: 'approve'; name: string; approve: boolean } | { type: 'reload' } | { type: 'setMcp'; servers: McpServerConfig[] }): Promise<AgentInfo>;
   agentOpenFolder(kind: 'logs' | 'plugins'): void;
+  /** A chat slash command; null when the text is not one (send it as a message instead). */
+  agentCommand(text: string): Promise<AgentCommandResult | null>;
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
   // user-made characters
   /** Re-reads the characters folder. */
@@ -177,8 +180,15 @@ export interface PetAPI {
   /** Chat window: the pending request about dropped files, if any (taking it clears it). */
   takeChatCompose(): Promise<ChatCompose | null>;
   onChatCompose(cb: () => void): () => void;
-  // Shared conversation (desktop chat + remote web page). Only present when the remote-chat add-on
-  // (remote-chat/server.cjs, wired in by remote-chat/install.py) is installed; otherwise chat is local.
+  // Harness: sessions (the left column of the chat), the raw event log of the current session, her face.
+  sessionsList(): Promise<{ current: string; sessions: SessionSummary[] } | { error: string }>;
+  sessionOpen(id: string): Promise<{ ok: true; id: string } | { error: string }>;
+  sessionNew(): Promise<{ ok: true; id: string } | { error: string }>;
+  trajectory(): Promise<{ id: string; events: TrajectoryEvent[] } | { error: string }>;
+  /** Her current face as a small PNG data URL ('' if unavailable). */
+  petAvatar(): Promise<string>;
+  // Shared conversation (desktop chat + remote web page), run by remote-chat/server.cjs inside the app.
+  // Optional only for very old builds; the chat falls back to a local conversation without it.
   sharedState?(): Promise<SharedChatSnapshot>;
   sharedSend?(text: string): Promise<{ error?: string }>;
   sharedAbort?(): Promise<unknown>;
@@ -190,6 +200,8 @@ export interface PetAPI {
 export interface SharedChatSnapshot {
   error?: string;
   version: number;
+  /** The current session and its run stats (harness builds). */
+  session?: { id: string; stats: SessionStatsView } | null;
   messages: (ChatMessage & { steps?: AgentStepView[]; failed?: boolean })[];
   active: {
     id: string;

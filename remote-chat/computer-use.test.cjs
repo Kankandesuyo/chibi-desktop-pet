@@ -73,8 +73,8 @@ test('pointer mapping respects normalized coordinates and window bounds', () => 
   assert.deepEqual(physicalPoint({ rect: { left: 0, top: 0, right: 100, bottom: 100 } }, { x: 1000, y: 1000 }), { x: 99, y: 99 });
 });
 test('the real executor denial prevents screenshot capture and input', async t => {
-  const { ToolExecutor } = require('./app-source/dist-electron/electron/agent/ToolExecutor.js');
-  const { ToolRegistry } = require('./app-source/dist-electron/electron/agent/ToolRegistry.js');
+  const { ToolExecutor } = require('../dist-electron/electron/agent/ToolExecutor.js');
+  const { ToolRegistry } = require('../dist-electron/electron/agent/ToolRegistry.js');
   const f = fixture(t), registry = new ToolRegistry(); registry.registerAll([f.observe, f.action]);
   const executor = new ToolExecutor(registry, { authorize: async () => ({ allowed: false, risk: 'high', reason: '用户拒绝' }), resolvePath: p => p }, { verify() { throw new Error('must not verify'); } }, { log() {}, countToolCall() {} }, { text: v => v, value: v => v }, {}, f.ctx.services);
   const result = await executor.run({ id: '1', name: 'computer_observe', arguments: { pid: 20, goal: '测试' } }, { taskId: 'task1', signal: f.ctx.signal, tainted: false, onStep() {} });
@@ -84,17 +84,17 @@ test('the real executor denial prevents screenshot capture and input', async t =
 test('computer use never targets its own authorization windows', async () => {
   const { createWindowsBackend } = require('./computer-use/windows.cjs');
   const row = { pid: process.pid, handle: 123, title: '桌宠聊天' };
-  const common = { app: { getAppPath: () => path.join(__dirname, 'app-source') }, platform: { ui: { listWindows: async () => [row] } }, electron: {} };
+  const common = { app: { getAppPath: () => path.join(__dirname, '..') }, platform: { ui: { listWindows: async () => [row] } }, electron: {} };
   await assert.rejects(createWindowsBackend(common).select({ pid: process.pid }), /不能操作桌宠自己/);
   assert.equal((await createWindowsBackend({ ...common, allowedSelfHandles: () => ['123'] }).select({ pid: process.pid, handle: '123' })).handle, 123);
 });
 
 test('the persisted computer-use switch removes and restores the tools', t => {
   const { installComputerUse } = require('./computer-use/index.cjs');
-  const { ToolRegistry } = require('./app-source/dist-electron/electron/agent/ToolRegistry.js');
+  const { ToolRegistry } = require('../dist-electron/electron/agent/ToolRegistry.js');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pet-computer-switch-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const registry = new ToolRegistry(), config = {};
-  const runtime = installComputerUse({ app: { getAppPath: () => path.join(__dirname, 'app-source') }, agent: { registry, controller: { deps: { platform: {} }, systemPrompt: () => 'base' } }, config, dataDir: dir, electron: {} });
+  const runtime = installComputerUse({ app: { getAppPath: () => path.join(__dirname, '..') }, agent: { registry, controller: { deps: { platform: {} }, systemPrompt: () => 'base' } }, config, dataDir: dir, electron: {} });
   assert.equal(registry.has('computer_observe'), true);
   config.updateComputerUseSettings({ enabled: false }); assert.equal(registry.has('computer_observe'), false); assert.equal(config.getComputerUseSettings().enabled, false);
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'computer-use.json'))).enabled, false);
@@ -131,8 +131,8 @@ test('system keys require confirmation, allow only defined shell actions, and in
 test('system key cancellation and denial cause no native input', async t => {
   const f = fixture(t); f.abort.abort();
   await assert.rejects(f.shellKey.execute({ keys: 'win' }, f.ctx)); assert.equal(f.calls, 0);
-  const { ToolExecutor } = require('./app-source/dist-electron/electron/agent/ToolExecutor.js');
-  const { ToolRegistry } = require('./app-source/dist-electron/electron/agent/ToolRegistry.js');
+  const { ToolExecutor } = require('../dist-electron/electron/agent/ToolExecutor.js');
+  const { ToolRegistry } = require('../dist-electron/electron/agent/ToolRegistry.js');
   const g = fixture(t), registry = new ToolRegistry(); registry.registerAll([g.shellKey]);
   const executor = new ToolExecutor(registry, { authorize: async () => ({ allowed: false, risk: 'high', reason: '用户拒绝' }), resolvePath: p => p }, {}, { log() {}, countToolCall() {} }, { text: v => v, value: v => v }, {}, {});
   assert.equal((await executor.run({ id: '1', name: 'computer_system_key', arguments: { keys: 'win' } }, { taskId: 'task1', signal: g.ctx.signal, tainted: false, onStep() {} })).status, 'denied');

@@ -1,16 +1,18 @@
-import { app, Menu, nativeImage, net, powerMonitor, protocol, Tray } from 'electron';
+import { app, ipcMain, Menu, nativeImage, net, powerMonitor, protocol, Tray } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createAgentRuntime } from './agent';
-import { describeImage, OpenAiCompatibleClient } from './agent/llm';
+import { OpenAiCompatibleClient } from './agent/llm';
 import { createElectronPlatform } from './agent/platform/electronPlatform';
 import { registerAgentHandlers } from './agentIpc';
 import { buildMonologuePrompt, buildPersona } from '../shared/persona';
 import { CHARACTERS, characterMeta, isBuiltinCharacter, type CharacterId } from '../shared/characters';
 import { CustomCharacters, parseUserCharacterPath } from './customCharacters';
 import { IPC } from '../shared/constants';
-import { completeOnce } from './aiClient';
+import { completeOnce, streamChat } from './aiClient';
+import { remote } from './remote';
+import { createSessionConversation } from './sessionConversation';
 import { ConfigStore } from './configStore';
 import { Monologue } from './monologue';
 import { SelfModel } from './selfModel';
@@ -114,10 +116,10 @@ if (!app.requestSingleInstanceLock()) {
       platform: createElectronPlatform(),
       llm: new OpenAiCompatibleClient(() => ({ ...config.getAiEndpoint(), apiKey: config.getApiKey() })),
       settings: () => config.getAgentSettings(),
-      vision: async (png, question, signal) => {
+      vision: async (png, question, signal, options) => {
         const ep = config.getVisionEndpoint();
         if (!ep.model) throw new Error('还没有配置视觉模型（设置 → 智能体 → 视觉模型）。普通文本模型看不懂图片。');
-        return describeImage(ep, fs.readFileSync(png), question, signal);
+        return remote.describeImage(ep, fs.readFileSync(png), question, signal, options);
       },
       pointAt: (target) => windows.pointAt(target),
       secrets: () => [config.getApiKey(), config.getVisionKey()],
@@ -127,6 +129,15 @@ if (!app.requestSingleInstanceLock()) {
       persona,
     });
     registerAgentHandlers(config, windows, agent, applySettings, life);
+    // Remote web chat, the shared desktop/web conversation and Computer Use (remote-chat/, packaged with the app).
+    // The conversation lives in the session log (shared by the desktop chat, the web page and the model).
+    const conversation = createSessionConversation({
+      sessions: agent.sessions, recaps: agent.recaps,
+      setChatHistory: (h) => config.setChatHistory(h),
+      legacyHistoryFile: path.join(app.getPath('userData'), 'remote-chat', 'shared-history.json'),
+      legacyDesktopHistory: () => config.getChatHistory(),
+    });
+    remote.start({ config, agent, windows, life, app, streamChat, notifyChannel: IPC.petNotify, ipcMain, applySettings, conversation });
 
     const monologue = new Monologue({
       level: () => config.getSettings().monologue,
@@ -148,6 +159,12 @@ if (!app.requestSingleInstanceLock()) {
     app.on('second-instance', () => windows.setPetVisible(true));
     windows.createPetWindow();
     createTray(windows, quit, config.getSettings().character);
+    // The chat window shows her face next to her replies (it follows the chosen character).
+    ipcMain.handle('pet:avatar', (e) => {
+      if (!windows.allWebContentsIds().includes(e.sender.id)) return '';
+      const icon = characterIcon(config.getSettings().character);
+      return icon.isEmpty() ? '' : icon.resize({ width: 64, height: 64, quality: 'best' }).toDataURL();
+    });
     life.onSettings = () => applyCharacterIcon(windows, config.getSettings().character);
     life.onSettings();
     app.setLoginItemSettings({ openAtLogin: config.getSettings().launchAtLogin });

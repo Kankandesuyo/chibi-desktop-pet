@@ -16,7 +16,7 @@ function save(file, value) {
   fs.writeFileSync(file + '.tmp', JSON.stringify(value, null, 2), { mode: 0o600 });
   fs.renameSync(file + '.tmp', file);
 }
-function startRemoteChat({ config, agent, windows, life, app, streamChat, notifyChannel, dataDir, port = PORT, ipcMain, applySettings, describeImage, normalizeImage = normalizeWithElectron }) {
+function startRemoteChat({ config, agent, windows, life, app, streamChat, notifyChannel, dataDir, port = PORT, ipcMain, applySettings, describeImage, normalizeImage = normalizeWithElectron, conversation: sessionConversation }) {
   dataDir ??= path.join(app.getPath('userData'), 'remote-chat');
   fs.mkdirSync(dataDir, { recursive: true });
   const computer = app && process.platform === 'win32' ? require('./computer-use/index.cjs').installComputerUse({ app, agent, config, dataDir }) : null;
@@ -28,6 +28,11 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
     fs.writeFileSync(path.join(dataDir, '访问口令.txt'), `桌宠远程网页访问口令（请保密）：\r\n${password}\r\n\r\n本机：http://127.0.0.1:${port}\r\n更换口令：退出桌宠后删除 auth.json，再启动桌宠。\r\n`, { mode: 0o600 });
   }
   const auth = JSON.parse(fs.readFileSync(credentialFile, 'utf8'));
+  // Local command-line access (tools/pet-cli.cjs): a bearer token only this Windows account can read,
+  // accepted only on the 127.0.0.1 address (never through the public tunnel).
+  const cliTokenFile = path.join(dataDir, 'cli-token.txt');
+  if (!fs.existsSync(cliTokenFile)) fs.writeFileSync(cliTokenFile, random(), { mode: 0o600 });
+  const cliToken = Buffer.from(fs.readFileSync(cliTokenFile, 'utf8').trim());
   // The agent must never send the web access password to its model or logs.
   let accessPassword = '';
   try { accessPassword = fs.readFileSync(path.join(dataDir, '访问口令.txt'), 'utf8').split('\n')[1].trim(); } catch {}
@@ -38,8 +43,20 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
   }
   const sessions = new Map(); const waiters = new Set();
   let active = null, version = 1, settingsRevision = 1, failures = [], broadcastTimer;
-  const conversation = createConversation({ config, dataDir, save, onChange: changed });
-  const snapshot = () => ({ version, settingsRevision, name: config.getSettings().petName, character: characterId(config.getSettings().character), agentEnabled: config.getAgentSettings().enabled, visionModel: config.getAgentSettings().vision?.model || '', messages: conversation.messages, active: active ? { ...active, abort: undefined } : null });
+  // The app passes a conversation backed by its session log; the JSON file store remains for tests / old hosts.
+  const conversation = sessionConversation ? sessionConversation(changed) : createConversation({ config, dataDir, save, onChange: changed });
+  const sessionsOf = () => agent.sessions || null;
+  const sessionStats = () => {
+    const turns = sessionsOf()?.turns() || [];
+    const total = { turns: turns.length, steps: 0, toolCalls: 0, llmMs: 0, toolMs: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, hasTokens: false };
+    for (const t of turns) {
+      const st = t.stats; if (!st) continue;
+      for (const k of ['steps', 'toolCalls', 'llmMs', 'toolMs']) total[k] += st[k] || 0;
+      if (st.inputTokens !== undefined) { total.hasTokens = true; total.inputTokens += st.inputTokens; total.outputTokens += st.outputTokens || 0; total.cachedTokens += st.cachedTokens || 0; }
+    }
+    return { total, last: turns.length ? turns[turns.length - 1].stats || null : null };
+  };
+  const snapshot = () => ({ version, settingsRevision, session: sessionsOf() ? { id: sessionsOf().id, stats: sessionStats() } : null, name: config.getSettings().petName, character: characterId(config.getSettings().character), agentEnabled: config.getAgentSettings().enabled, visionModel: config.getAgentSettings().vision?.model || '', messages: conversation.messages, active: active ? { ...active, abort: undefined } : null });
   function changed() {
     version++;
     if (!broadcastTimer) broadcastTimer = setTimeout(() => {
@@ -50,7 +67,8 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
   }
   const redact = (value) => {
     let text = String(value ?? '');
-    for (const secret of [config.getApiKey(), config.getVisionKey?.(), accessPassword].filter(Boolean)) text = text.split(secret).join('[已隐藏密钥]');
+    // Too-short values would blank ordinary words (a 1-letter "key" would hide every "k"); real keys are long.
+    for (const secret of [config.getApiKey(), config.getVisionKey?.(), accessPassword].filter((v) => typeof v === 'string' && v.length >= 8)) text = text.split(secret).join('[已隐藏密钥]');
     return text.slice(0, 60000);
   };
   const clean = value => JSON.parse(JSON.stringify(value, (_key, v) => typeof v === 'string' ? redact(v) : v));
@@ -131,6 +149,20 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
         void work().catch(err => event({ type: 'error', requestId: id, message: err.message }));
         return { id };
   }
+  const busy = () => { if (active || agent.controller.isRunning() || life.activity.streaming > 0) throw Object.assign(new Error('桌宠正在处理任务，请先等它完成或停止'), { status: 409 }); };
+  const noSessions = () => Object.assign(new Error('会话功能不可用'), { status: 404 });
+  function listSessions() { const st = sessionsOf(); if (!st) throw noSessions(); return { current: st.id, sessions: st.list() }; }
+  function openSession(id) {
+    const st = sessionsOf(); if (!st) throw noSessions(); busy();
+    if (typeof id !== 'string' || !st.switchTo(id)) throw Object.assign(new Error('这个会话不存在'), { status: 404 });
+    return { ok: true, id: st.id };
+  }
+  function newSession() { if (!sessionsOf()) throw noSessions(); busy(); conversation.clear(); return { ok: true, id: sessionsOf().id }; }
+  function trajectory() { const st = sessionsOf(); if (!st) throw noSessions(); return { id: st.id, events: clean(st.events(1500)) }; }
+  function command(text) {
+    if (typeof text !== 'string' || !text.trim() || text.length > 2000) throw Object.assign(new Error('命令格式不正确'), { status: 400 });
+    return (agent.command && agent.command(text)) || { notCommand: true };
+  }
   function abortTask() { if (active) { active.abort?.(); agent.controller.abort(active.id); } }
   function clearHistory() {
     if (active) throw Object.assign(new Error('请先停止当前任务，再清空聊天记录'), { status: 409 });
@@ -170,6 +202,10 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
     handle('chat:shared-send', text => sendMessage({ text }, 'desktop', true));
     handle('chat:shared-abort', () => { abortTask(); return { ok: true }; });
     handle('chat:shared-clear', clearHistory);
+    handle('chat:sessions', listSessions);
+    handle('chat:session-open', openSession);
+    handle('chat:session-new', newSession);
+    handle('chat:trajectory', trajectory);
   }
   // Local CLI entry points also make the transparent pet usable without a
   // precision right-click on a moving sprite.
@@ -229,6 +265,8 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
     const origin = allowed(req);
     if (!origin) return respond(res, 403, { error: '访问地址未授权' });
     if (req.headers.origin && req.headers.origin !== origin) return respond(res, 403, { error: '来源校验失败' });
+    const bearer = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(req.headers.authorization || '')?.[1];
+    const cli = !!bearer && origin.startsWith('http://') && bearer.length === cliToken.length && crypto.timingSafeEqual(Buffer.from(bearer), cliToken);
     try {
       const url = new URL(req.url, origin);
       if (req.method === 'GET' && assets[url.pathname]) {
@@ -236,7 +274,7 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
         res.setHeader('Content-Type', type);
         return res.end(fs.readFileSync(path.join(__dirname, 'public', file)));
       }
-      if (req.method === 'POST') {
+      if (req.method === 'POST' && !cli) {
         if (req.headers.origin !== origin || !req.headers['content-type']?.startsWith('application/json')) return respond(res, 403, { error: '请求校验失败' });
       }
       if (url.pathname === '/api/login' && req.method === 'POST') {
@@ -253,9 +291,9 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
         res.setHeader('Set-Cookie', `pet_session=${cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${origin.startsWith('https:') ? '; Secure' : ''}`);
         return respond(res, 200, { csrf });
       }
-      const s = session(req);
+      const s = cli ? { cli: true, cookie: null, csrf: null, expires: Infinity } : session(req);
       if (!s) return respond(res, 401, { error: '请先输入访问口令' });
-      if (req.method === 'POST' && req.headers['x-csrf-token'] !== s.csrf) return respond(res, 403, { error: '会话校验失败，请重新登录' });
+      if (req.method === 'POST' && !cli && req.headers['x-csrf-token'] !== s.csrf) return respond(res, 403, { error: '会话校验失败，请重新登录' });
       if (req.method === 'GET' && /^\/api\/images\/[a-f0-9]{64}$/.test(url.pathname)) {
         const imageId = url.pathname.split('/').pop();
         if (!conversation.messages.some(m => m.image?.id === imageId)) return respond(res, 404, { error: '图片不存在' });
@@ -265,12 +303,17 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
       if (url.pathname === '/api/settings' && req.method === 'GET') return respond(res, 200, settingsSnapshot());
       if (url.pathname === '/api/settings' && req.method === 'POST') return respond(res, 200, writeSettings(await body(req)));
       if (url.pathname === '/api/clear' && req.method === 'POST') return respond(res, 200, clearHistory());
+      if (url.pathname === '/api/sessions' && req.method === 'GET') return respond(res, 200, listSessions());
+      if (url.pathname === '/api/sessions/open' && req.method === 'POST') return respond(res, 200, openSession((await body(req)).id));
+      if (url.pathname === '/api/sessions/new' && req.method === 'POST') return respond(res, 200, newSession());
+      if (url.pathname === '/api/trajectory' && req.method === 'GET') return respond(res, 200, trajectory());
+      if (url.pathname === '/api/command' && req.method === 'POST') return respond(res, 200, command((await body(req)).text));
       if (url.pathname === '/api/state' && req.method === 'GET') {
         if (Number(url.searchParams.get('version')) !== version) return respond(res, 200, snapshot());
         if (waiters.size >= 12) return respond(res, 429, { error: '连接数量过多' });
         const send = () => {
           waiters.delete(send); clearTimeout(timer);
-          if (!sessions.has(s.cookie) || s.expires < Date.now()) return respond(res, 401, { error: '登录已过期' });
+          if (!s.cli && (!sessions.has(s.cookie) || s.expires < Date.now())) return respond(res, 401, { error: '登录已过期' });
           respond(res, 200, snapshot());
         };
         const timer = setTimeout(send, 22000); waiters.add(send);
@@ -278,7 +321,7 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
         return;
       }
       if (url.pathname === '/api/logout' && req.method === 'POST') {
-        sessions.delete(s.cookie);
+        if (s.cookie) sessions.delete(s.cookie);
         res.setHeader('Set-Cookie', `pet_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${origin.startsWith('https:') ? '; Secure' : ''}`);
         changed(); return respond(res, 200, { ok: true });
       }

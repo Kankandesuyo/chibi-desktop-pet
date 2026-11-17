@@ -129,7 +129,7 @@ export function lastToolResult(messages: LlmMessage[]): Record<string, unknown> 
 }
 
 export const DEFAULT_SETTINGS: AgentSettings = {
-  enabled: true, autoApproveMedium: false, allowedRoots: [], fullDiskAccess: false,
+  enabled: true, autoApproveMedium: false, readOnly: false, allowedRoots: [], fullDiskAccess: false,
   toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as AgentSettings['toolGroups'],
   toolProtocol: 'native', maxSteps: 20, vision: { baseUrl: '', model: '', hasApiKey: false },
 };

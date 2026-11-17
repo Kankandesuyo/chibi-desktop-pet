@@ -1,19 +1,12 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
 const path = require('node:path');
-const vm = require('node:vm');
-const { createRequire } = require('node:module');
-function loadPatched(file) {
-  const root = path.join(__dirname, '..');
-  const source = execFileSync('python', ['-c', "import sys,pathlib;sys.path.insert(0,'remote-chat');from desktop_patch import patch;p=sys.argv[1];d=patch(p,pathlib.Path('remote-chat/app-source',p).read_bytes());assert patch(p,d)==d;sys.stdout.buffer.write(d)", file], { cwd: root, encoding: 'utf8' });
-  const module = { exports: {} };
-  vm.runInNewContext('(function(require,module,exports){' + source + '\n})', {})(createRequire(path.join(__dirname, 'app-source', file)), module, module.exports);
-  return module.exports;
-}
-const persona = loadPatched('dist-electron/shared/persona.js');
-const protocol = loadPatched('dist-electron/shared/aiProtocol.js');
+// The persona / reply-style changes are part of the app source now (they used to be patched into the build).
+// Run `npm run build:electron` first: these tests load the compiled files.
+function loadBuilt(file) { return require(path.join(__dirname, '..', file)); }
+const persona = loadBuilt('dist-electron/shared/persona.js');
+const protocol = loadBuilt('dist-electron/shared/aiProtocol.js');
 test('custom traits replace default personality while retaining truth and authorization boundaries', () => {
   const traits = '温文尔雅，知性聪慧；不刻意卖萌。';
   const result = persona.buildPersona({ name: '测试', traits, selfState: '今天处理过一个任务' });

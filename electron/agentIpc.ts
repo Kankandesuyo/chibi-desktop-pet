@@ -102,6 +102,10 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
     }
     Menu.buildFromTemplate(template).popup({ window: windows.pet ?? undefined });
   });
+  ipcMain.handle(IPC.agentCommand, (e, text) => {
+    if (!trusted(e) || typeof text !== 'string' || text.length > 2000) return null;
+    return agent.command(text);
+  });
   ipcMain.handle(IPC.chatTakeCompose, (e) => (trusted(e) ? windows.takeCompose(e.sender.id) : null));
 
   on(IPC.agentOpenFolder, (_e, kind) => {

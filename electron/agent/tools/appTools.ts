@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { isInside } from '../PermissionManager';
 import { TaskVerifier } from '../TaskVerifier';
 import { defineTool, type AnyTool, type RunningApp, type ToolContext } from '../types';
+import { guardWeChatLaunch } from './appReuse';
 
 const SCRIPT_EXT = /\.(bat|cmd|ps1|vbs|vbe|js|jse|wsf|wsh|msi|msp|reg|scr|hta|com|cpl)$/i;
 const EXEC_EXT = /\.(exe|lnk|appref-ms)$/i;
@@ -94,11 +95,14 @@ const launchApplication = defineTool<{ target: string; args?: string[]; workingD
     if (!target.toLowerCase().startsWith('shell:') && !EXEC_EXT.test(target)) {
       return { ok: false, summary: '不是程序', error: '要打开普通文件或文件夹请用 open_path' };
     }
+    const existing = await guardWeChatLaunch(target, ctx.platform);
+    if (existing) return existing;
     const before = await ctx.platform.listRunningApps().catch(() => [] as RunningApp[]);
     const r = await ctx.platform.launch({ target, args: a.args, cwd: a.workingDirectory ? ctx.resolvePath(a.workingDirectory) : undefined });
     return { ok: true, summary: `已发出启动 ${nameHint(target)} 的命令`, data: { target, pid: r.pid, hint: nameHint(target), before: before.map((x) => x.pid) } };
   },
   verify: async (_a, r, ctx) => {
+    if ((r.data as { reusedExisting?: boolean } | undefined)?.reusedExisting) return { verified: true, detail: '已检测到现有微信，未启动新进程；登录状态和聊天界面尚需检查' };
     const d = r.data as { pid?: number; hint: string; before: number[] };
     let found: RunningApp | undefined;
     const ok = await TaskVerifier.waitFor(async () => {

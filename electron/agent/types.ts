@@ -110,7 +110,7 @@ export interface AgentServices {
   journal: import('./FileJournal').FileJournal;
   processes: import('./tools/devTools').ProcessManager;
   browser: import('./tools/browserTools').BrowserSession;
-  vision: (pngPath: string, question: string, signal: AbortSignal) => Promise<string>;
+  vision: (pngPath: string, question: string, signal: AbortSignal, options?: { json?: boolean }) => Promise<string>;
   /** Shows the user a spot on the primary screen (highlight ring + the pet walks over). Absent in tests / headless. */
   pointAt?: (target: ScreenTarget) => void;
 }
@@ -139,6 +139,11 @@ export interface ToolDefinition<A = Record<string, unknown>> {
   source?: string;
   /** External schemas (MCP) use JSON-Schema features we don't validate; only "is an object" is checked. */
   looseSchema?: boolean;
+  /**
+   * Read-only and independent of other calls, so it may run side by side with other such calls in the
+   * same step. Only honoured for low-risk tools that never ask the user.
+   */
+  concurrencySafe?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

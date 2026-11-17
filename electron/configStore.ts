@@ -31,7 +31,7 @@ interface StoredConfig {
 
 const DEFAULT_AGENT: StoredAgent = {
   settings: {
-    enabled: true, autoApproveMedium: false, allowedRoots: [], fullDiskAccess: true,
+    enabled: true, autoApproveMedium: false, readOnly: false, allowedRoots: [], fullDiskAccess: true,
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
     toolProtocol: 'auto', maxSteps: 25, vision: { baseUrl: '', model: '' },
   },
@@ -93,6 +93,7 @@ export function sanitizeAgentSettings(input: unknown, base: StoredAgentSettings)
   return {
     enabled: bool(s.enabled, base.enabled),
     autoApproveMedium: bool(s.autoApproveMedium, base.autoApproveMedium),
+    readOnly: bool(s.readOnly, base.readOnly),
     fullDiskAccess: bool(s.fullDiskAccess, base.fullDiskAccess),
     allowedRoots: [...new Set(roots.filter((r): r is string => typeof r === 'string' && path.isAbsolute(r)).map((r) => r.slice(0, 500)))].slice(0, 30),
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, bool(groups[g], base.toolGroups[g])])) as Record<ToolGroup, boolean>,

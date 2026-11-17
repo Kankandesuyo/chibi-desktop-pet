@@ -131,6 +131,10 @@ const pressHotkey = defineTool<{ keys: string; window?: string; pid?: number }>(
     ? { risk: 'high', reason: '这个按键可能关闭窗口或删除内容', preview: [`按键：${a.keys}`, `窗口：${a.window ?? a.pid ?? '当前窗口'}`] }
     : { risk: 'medium', preview: [`按键：${a.keys}`, `窗口：${a.window ?? a.pid ?? '当前窗口'}`] }),
   execute: async (a, ctx) => {
+    // System keys have their own tool with its own confirmation (computer_system_key).
+    if (/(?:^|\+)\s*(?:win|windows|meta)\s*(?:\+|$)/i.test(a.keys)) {
+      return { ok: false, summary: 'Win 系统键请使用 computer_system_key 并单独确认', error: '支持 win、win+e、win+d；请不要反复调用旧快捷键工具' };
+    }
     await ctx.platform.ui.hotkey(a.window || a.pid ? toTarget(a) : null, a.keys);
     return { ok: true, summary: `已按下 ${a.keys}` };
   },
@@ -143,7 +147,9 @@ const scrollUi = defineTool<{ window?: string; pid?: number; name?: string; auto
   title: (a) => `向${a.direction === 'up' ? '上' : '下'}滚动`,
   execute: async (a, ctx) => {
     const miss = needTarget(a); if (miss) return { ok: false, summary: '缺少窗口', error: miss };
-    await ctx.platform.ui.scroll(toTarget(a), toElement(a), a.direction, a.amount ?? 1);
+    try { await ctx.platform.ui.scroll(toTarget(a), toElement(a), a.direction, a.amount ?? 1); } catch (err) {
+      return { ok: false, summary: '无障碍滚动不可用；请改用 computer_observe 定位内容区域，再 computer_act(action=scroll)', error: err instanceof Error ? err.message : String(err) };
+    }
     return { ok: true, summary: '已滚动' };
   },
 });

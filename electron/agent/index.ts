@@ -20,6 +20,21 @@ import { fileTools } from './tools/fileTools';
 import { adminTools } from './tools/adminTools';
 import { memoryTools, uiTools } from './tools/memoryUiTools';
 import type { AgentServices, DesktopPlatform, ScreenTarget } from './types';
+import { SessionStore } from './SessionStore';
+import { TaskRecaps } from './TaskRecap';
+import { TurnHooks } from './TurnHooks';
+import { compactionPlugin, readOnlyPlugin, recapPlugin, replayRecaps, sessionLogPlugin } from './turnPlugins';
+import { runCommand } from './commands';
+
+/**
+ * Built-in tools that only look (no side effects, never ask the user), so several in one step may run
+ * side by side. read_file is left out on purpose: sensitive files make it ask for confirmation.
+ */
+const CONCURRENCY_SAFE = new Set([
+  'get_known_folders', 'get_system_info', 'list_directory', 'search_files', 'get_file_info',
+  'list_running_apps', 'find_installed_app', 'list_installed_software', 'winget_search', 'registry_read',
+  'project_tree', 'git_status', 'list_dev_servers', 'list_memories', 'get_active_window', 'list_windows',
+]);
 
 export interface AgentRuntimeOptions {
   /** Where memory, logs, journal and plugins live. */
@@ -27,7 +42,7 @@ export interface AgentRuntimeOptions {
   platform: DesktopPlatform;
   llm: LlmClient;
   settings(): AgentSettings;
-  vision(pngPath: string, question: string, signal: AbortSignal): Promise<string>;
+  vision(pngPath: string, question: string, signal: AbortSignal, options?: { json?: boolean }): Promise<string>;
   /** Shows a spot on screen to the user (see AgentServices.pointAt). */
   pointAt?(target: ScreenTarget): void;
   /** Exact strings that must never reach the log or the model (e.g. the API keys). */
@@ -49,7 +64,9 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   refreshSecrets();
 
   const registry = new ToolRegistry();
-  registry.registerAll([updatePlanTool, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools]);
+  const builtins = [updatePlanTool, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools];
+  for (const t of builtins) if (CONCURRENCY_SAFE.has(t.name)) t.concurrencySafe = true;
+  registry.registerAll(builtins);
 
   const allowedRoots = (): string[] => {
     const f = o.platform.knownFolders();
@@ -78,16 +95,30 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   const browser = new BrowserSession(o.browser);
   const services: AgentServices = { memory, planner, journal, processes, browser, vision: o.vision, ...(o.pointAt ? { pointAt: o.pointAt } : {}) };
   const executor = new ToolExecutor(registry, permissions, new TaskVerifier(), logger, redactor, o.platform, services);
+  const redact = (s: string): string => redactor.text(s);
+  const hooks = new TurnHooks();
+  const sessions = new SessionStore(path.join(o.baseDir, 'sessions'));
+  const recaps = new TaskRecaps();
+  replayRecaps(recaps, sessions);
   controller = new AgentController({
     registry, executor, permissions, planner, memory, logger, llm: o.llm, platform: o.platform,
-    settings: o.settings, allowedRoots, persona: o.persona, redact: (s) => redactor.text(s),
+    settings: o.settings, allowedRoots, persona: o.persona, redact, hooks, recaps,
   });
+  const ctl = controller;
+  // Built-in turn plugins (order matters only for what ends up first in the log).
+  sessionLogPlugin(hooks, sessions, redact);
+  recapPlugin(hooks, recaps, sessions);
+  compactionPlugin(hooks, () => ctl.compactOptions, logger, sessions);
+  readOnlyPlugin(hooks, registry, () => o.settings().readOnly === true);
   const plugins = new ToolPluginManager(registry, path.join(o.baseDir, 'plugins'), o.approvals, o.mcpServers);
   const applyGroups = (): void => registry.setEnabledGroups(o.settings().toolGroups);
   applyGroups();
 
   return {
-    controller, registry, permissions, logger, memory, planner, journal, processes, browser, plugins, redactor,
+    controller, registry, permissions, logger, memory, planner, journal, processes, browser, plugins, redactor, hooks, sessions, recaps,
+    platform: o.platform,
+    /** A chat slash command (/help, /resume…); null when the text is not one. */
+    command: (text: string) => runCommand(text, { controller: ctl, sessions, recaps, registry }),
     allowedRoots, applyGroups, refreshSecrets,
     info(): AgentInfo {
       const f = o.platform.knownFolders();
