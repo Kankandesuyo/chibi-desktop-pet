@@ -1,0 +1,27 @@
+node_modules/
+dist/
+dist-electron/
+release/
+smoke-out/
+
+# Never commit secrets or runtime data (they live in %APPDATA%\chibi-desktop-pet, but just in case)
+.env
+.env.*
+访问口令.txt
+远程聊天地址.txt
+auth.json
+origins.json
+tunnel.json
+*.log
+*.jsonl
+__pycache__/
+*.pyc
+
+# Large binaries and local-only folders of the remote-chat add-on
+remote-chat/tools/
+remote-chat/backups/
+remote-chat/outputs/
+remote-chat/previews/
+remote-chat/patch-check/
+remote-chat/app-current/
+remote-chat/app-source/

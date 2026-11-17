@@ -1,0 +1,327 @@
+{
+  "version": 1,
+  "canvas": {
+    "width": 640,
+    "height": 580,
+    "anchor": [
+      320,
+      552
+    ],
+    "standHeight": 440
+  },
+  "fallback": "idle",
+  "blink": {
+    "base": "idle",
+    "closed": "blink"
+  },
+  "poses": {
+    "idle": {
+      "file": "idle.png",
+      "source": "claudepet_chibi_01.png",
+      "bounds": [
+        160,
+        109,
+        326,
+        443
+      ],
+      "hem": 509
+    },
+    "blink": {
+      "file": "blink.png",
+      "source": "idle + eyes of claudepet_chibi_14.png",
+      "bounds": [
+        160,
+        109,
+        326,
+        443
+      ],
+      "hem": 509
+    },
+    "closed-smile": {
+      "file": "closed-smile.png",
+      "source": "claudepet_chibi_14.png",
+      "bounds": [
+        163,
+        113,
+        318,
+        439
+      ],
+      "cheeks": [
+        [
+          272,
+          256
+        ],
+        [
+          366,
+          252
+        ]
+      ],
+      "hem": 503
+    },
+    "wink": {
+      "file": "wink.png",
+      "source": "claudepet_chibi_15.png",
+      "bounds": [
+        160,
+        114,
+        324,
+        438
+      ],
+      "hem": 504
+    },
+    "wave": {
+      "file": "wave.png",
+      "source": "claudepet_chibi_16.png",
+      "bounds": [
+        166,
+        115,
+        316,
+        437
+      ],
+      "hem": 495
+    },
+    "happy": {
+      "file": "happy.png",
+      "source": "claudepet_chibi_06.png",
+      "bounds": [
+        178,
+        142,
+        299,
+        410
+      ],
+      "hem": 510
+    },
+    "kick": {
+      "file": "kick.png",
+      "source": "claudepet_chibi_11.png",
+      "bounds": [
+        202,
+        132,
+        260,
+        420
+      ],
+      "hem": 489
+    },
+    "jump": {
+      "file": "jump.png",
+      "source": "claudepet_chibi_17.png",
+      "bounds": [
+        157,
+        135,
+        331,
+        417
+      ],
+      "hem": 504
+    },
+    "left": {
+      "file": "left.png",
+      "source": "claudepet_chibi_02.png",
+      "bounds": [
+        238,
+        114,
+        257,
+        438
+      ],
+      "hem": 500,
+      "rig": {
+        "body": "left-body.png",
+        "leg": "left-leg.png",
+        "origin": [
+          288,
+          456
+        ],
+        "hip": [
+          324.0,
+          462
+        ]
+      }
+    },
+    "right": {
+      "file": "right.png",
+      "source": "claudepet_chibi_12.png",
+      "bounds": [
+        164,
+        109,
+        241,
+        443
+      ],
+      "hem": 498,
+      "rig": {
+        "body": "right-body.png",
+        "leg": "right-leg.png",
+        "origin": [
+          276,
+          454
+        ],
+        "hip": [
+          314.0,
+          460
+        ]
+      }
+    },
+    "back": {
+      "file": "back.png",
+      "source": "claudepet_chibi_13.png",
+      "bounds": [
+        182,
+        120,
+        278,
+        432
+      ],
+      "hem": 509
+    },
+    "run-left": {
+      "file": "run-left.png",
+      "source": "claudepet_chibi_05.png",
+      "bounds": [
+        182,
+        172,
+        323,
+        380
+      ],
+      "hem": 504
+    },
+    "struggle": {
+      "file": "struggle.png",
+      "source": "claudepet_chibi_07.png",
+      "bounds": [
+        143,
+        157,
+        366,
+        395
+      ],
+      "hem": 517
+    },
+    "hang": {
+      "file": "hang.png",
+      "source": "claudepet_chibi_09.png",
+      "bounds": [
+        126,
+        256,
+        390,
+        296
+      ],
+      "grab": [
+        376,
+        264
+      ],
+      "hem": 450
+    },
+    "walk-left-1": {
+      "file": "walk-left-1.png",
+      "source": "GPT walk-left sprite sheet, frame 1",
+      "hem": 501
+    },
+    "walk-left-2": {
+      "file": "walk-left-2.png",
+      "source": "GPT walk-left sprite sheet, frame 2",
+      "hem": 489
+    },
+    "walk-left-3": {
+      "file": "walk-left-3.png",
+      "source": "GPT walk-left sprite sheet, frame 3",
+      "hem": 500
+    },
+    "walk-left-4": {
+      "file": "walk-left-4.png",
+      "source": "GPT walk-left sprite sheet, frame 4",
+      "hem": 490
+    }
+  },
+  "states": {
+    "idle": [
+      "idle"
+    ],
+    "blink": [
+      "wink"
+    ],
+    "lookAround": [
+      "idle"
+    ],
+    "walkLeft": [
+      "walk-left-1"
+    ],
+    "walkRight": [
+      "right"
+    ],
+    "run": [
+      "walk-left-1"
+    ],
+    "run:right": [
+      "right"
+    ],
+    "turnLeft": [
+      "walk-left-2"
+    ],
+    "turnRight": [
+      "right"
+    ],
+    "jump": [
+      "jump"
+    ],
+    "dragStart": [
+      "struggle"
+    ],
+    "dragging": [
+      "hang"
+    ],
+    "struggling": [
+      "struggle"
+    ],
+    "falling": [
+      "jump"
+    ],
+    "landing": [
+      "idle"
+    ],
+    "petting": [
+      "closed-smile"
+    ],
+    "happy": [
+      "happy",
+      "wave",
+      "kick"
+    ],
+    "shy": [
+      "closed-smile"
+    ],
+    "angry": [
+      "back"
+    ],
+    "sleeping": [
+      "closed-smile"
+    ],
+    "waking": [
+      "idle"
+    ],
+    "talking": [
+      "idle"
+    ]
+  },
+  "parts": [
+    "left-body.png",
+    "left-leg.png",
+    "right-body.png",
+    "right-leg.png"
+  ],
+  "sequences": {
+    "walkLeft": {
+      "frames": [
+        "walk-left-1",
+        "walk-left-2",
+        "walk-left-3",
+        "walk-left-4"
+      ],
+      "fps": 7
+    },
+    "run:left": {
+      "frames": [
+        "walk-left-1",
+        "walk-left-2",
+        "walk-left-3",
+        "walk-left-4"
+      ],
+      "fps": 12
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "extends": "./electron/tsconfig.json",
+  "compilerOptions": { "noEmit": true, "types": ["node"] },
+  "include": ["electron/**/*.ts", "shared/**/*.ts", "tests/agent/**/*.ts"]
+}

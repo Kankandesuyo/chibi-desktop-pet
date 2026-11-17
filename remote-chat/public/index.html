@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f07a2a"><title>桌宠 · 远程聊天</title><link rel="icon" href="/pet.png"><link rel="stylesheet" href="/style.css"><script src="/characters.js" defer></script><script src="/app.js" defer></script></head>
+<body>
+<main>
+  <aside class="companion"><div class="brand"><span id="brand-symbol" class="flower">✿</span> 桌宠<span class="brand-sub">远程陪伴</span></div><div class="pet-stage"><div class="pet-speech">隔着屏幕，也在你身边。</div><img src="/pet.png" data-pet-image alt="你电脑上的桌宠" class="pet-art"></div><div class="companion-note"><strong>熟悉的我，随时聊聊</strong><p>共用电脑桌宠的人格、记忆和 Agent。<br>电脑保持开机联网，桌宠保持运行。</p></div></aside>
+  <section class="chat" aria-label="桌宠聊天">
+    <header class="chat-head"><div class="identity"><span class="avatar-frame"><img src="/pet.png" data-pet-image alt="" class="avatar"></span><div><strong id="pet-name">桌宠</strong><small><i id="status-dot"></i><span id="status">等待连接</span></small></div></div><div class="head-actions"><button id="settings-open" class="head-button" hidden>设置</button><button id="logout" class="head-button" hidden>退出登录</button></div></header>
+    <section id="login" class="login"><img src="/pet.png" data-pet-image alt="桌宠在等你" class="login-pet"><h1>和桌宠保持联系</h1><p>输入电脑上生成的访问口令，<br>继续和熟悉的桌宠聊天。</p><form id="login-form"><label for="password">访问口令</label><input id="password" type="password" autocomplete="current-password" required maxlength="256" placeholder="输入你的专属口令"><button type="submit">连接桌宠</button></form><p class="privacy">模型密钥留在电脑上，不会发送到此网页。</p></section>
+    <div id="conversation" class="conversation" hidden>
+      <div id="messages" class="chat-list" role="log" aria-label="聊天记录" aria-live="polite"></div>
+      <section id="task" class="agent-live" hidden><div class="task-heading"><strong id="phase">正在思考…</strong><button id="abort" class="text-button">停止任务</button></div><div id="steps"></div><p id="interim"></p><p id="draft"></p></section>
+      <section id="confirm" class="confirm" hidden><div class="confirm-head"><strong id="confirm-title"></strong><span id="risk" class="badge"></span></div><p id="reason"></p><pre id="preview"></pre><div class="confirm-actions"><button id="deny" class="secondary">拒绝</button><button id="allow">允许这一次</button></div><small>确认超时会自动拒绝；Windows 管理员弹窗仍需在电脑处理。</small></section>
+      <div id="image-preview" class="image-preview" hidden><img id="image-preview-img" alt="待发送图片预览"><div><strong id="image-name"></strong><p id="image-send-note">点击发送后，图片将交给视觉模型分析。</p><button type="button" id="image-remove" class="text-button">移除图片</button></div></div>
+      <form id="message-form" class="chat-form"><input id="image-file" type="file" accept="image/png,image/jpeg" hidden><button type="button" id="image-pick" class="image-pick" title="发送图片（PNG / JPG，最多 5 MB）">图片</button><label for="message" class="sr-only">给桌宠发消息</label><textarea id="message" rows="1" maxlength="4000" placeholder="给桌宠发消息…"></textarea><button type="submit" id="send">发送</button></form><div class="input-note">Enter 发送 · Shift + Enter 换行<span>任务操作保留原有权限检查</span></div>
+    </div>
+    <p id="notice" class="notice" role="alert" hidden></p>
+  </section>
+</main>
+<dialog id="settings-dialog" aria-labelledby="settings-title"><form id="settings-form">
+  <header class="settings-header"><div><h2 id="settings-title">桌宠设置</h2><p>与电脑端共用，保存后同步生效</p></div><button type="button" id="settings-close" class="text-button" aria-label="关闭设置">关闭</button></header>
+  <nav id="settings-tabs" class="settings-tabs" role="tablist" aria-label="设置分类"></nav>
+  <div id="settings-body" class="settings-body"></div>
+  <footer class="settings-footer"><p id="settings-notice" role="status"></p><div><button type="button" id="settings-reload" class="text-button">重新加载</button><button type="submit" id="settings-save">保存设置</button></div></footer>
+</form></dialog>
+</body></html>

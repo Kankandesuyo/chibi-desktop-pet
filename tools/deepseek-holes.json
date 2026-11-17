@@ -1,0 +1,11 @@
+{
+  "_note": "Leftover white background enclosed by hair, which the automatic cut-out kept. Each point (source pixels) sits inside one such pocket; import_character.py makes that pocket transparent. Checked by eye; white clothing is not listed.",
+  "directions/front.png": [[268, 48], [529, 350], [494, 297], [485, 452], [186, 438], [176, 453]],
+  "directions/left.png": [[402, 273], [439, 345], [394, 436], [404, 467]],
+  "directions/right.png": [[211, 269], [217, 463], [173, 340], [231, 434], [264, 387]],
+  "directions/back.png": [[121, 294], [96, 424]],
+  "walk_left/walk_left_01.png": [[376, 530], [372, 462], [427, 366], [89, 223]],
+  "walk_left/walk_left_02.png": [[363, 505], [436, 351], [374, 420], [89, 201]],
+  "walk_left/walk_left_03.png": [[375, 525], [372, 463], [429, 367]],
+  "walk_left/walk_left_04.png": [[362, 505], [436, 351], [375, 421], [91, 201]]
+}

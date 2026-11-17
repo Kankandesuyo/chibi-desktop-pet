@@ -1,0 +1,737 @@
+{
+  "version": 1,
+  "character": "DeepSeek 鲸鱼女仆（同人 Q 版）",
+  "canvas": {
+    "width": 640,
+    "height": 580,
+    "anchor": [
+      320,
+      552
+    ],
+    "standHeight": 440
+  },
+  "fallback": "idle",
+  "blink": {
+    "base": "idle",
+    "closed": "blink",
+    "pairs": {
+      "idle-shut": "blink-shut"
+    }
+  },
+  "poses": {
+    "idle": {
+      "file": "idle.png",
+      "bounds": [
+        154,
+        112,
+        338,
+        440
+      ],
+      "source": "directions/front.png",
+      "hem": 490
+    },
+    "left": {
+      "file": "left.png",
+      "bounds": [
+        239,
+        116,
+        296,
+        435
+      ],
+      "source": "directions/left.png",
+      "hem": 490
+    },
+    "right": {
+      "file": "right.png",
+      "bounds": [
+        119,
+        111,
+        286,
+        441
+      ],
+      "source": "directions/right.png",
+      "hem": 490
+    },
+    "back": {
+      "file": "back.png",
+      "bounds": [
+        158,
+        110,
+        319,
+        442
+      ],
+      "source": "directions/back.png",
+      "hem": 490
+    },
+    "walk-left-1": {
+      "file": "walk-left-1.png",
+      "bounds": [
+        207,
+        121,
+        295,
+        430
+      ],
+      "source": "walk_left/walk_left_01.png",
+      "hem": 464
+    },
+    "walk-right-1": {
+      "file": "walk-right-1.png",
+      "bounds": [
+        138,
+        121,
+        295,
+        430
+      ],
+      "source": "walk-left-1.png, flipped (placeholder)",
+      "mirrored": true,
+      "hem": 464
+    },
+    "walk-left-2": {
+      "file": "walk-left-2.png",
+      "bounds": [
+        224,
+        112,
+        278,
+        439
+      ],
+      "source": "walk_left/walk_left_02.png",
+      "hem": 464
+    },
+    "walk-right-2": {
+      "file": "walk-right-2.png",
+      "bounds": [
+        138,
+        112,
+        278,
+        439
+      ],
+      "source": "walk-left-2.png, flipped (placeholder)",
+      "mirrored": true,
+      "hem": 464
+    },
+    "walk-left-3": {
+      "file": "walk-left-3.png",
+      "bounds": [
+        208,
+        121,
+        294,
+        430
+      ],
+      "source": "walk_left/walk_left_03.png",
+      "hem": 464
+    },
+    "walk-right-3": {
+      "file": "walk-right-3.png",
+      "bounds": [
+        138,
+        121,
+        294,
+        430
+      ],
+      "source": "walk-left-3.png, flipped (placeholder)",
+      "mirrored": true,
+      "hem": 464
+    },
+    "walk-left-4": {
+      "file": "walk-left-4.png",
+      "bounds": [
+        224,
+        112,
+        278,
+        439
+      ],
+      "source": "walk_left/walk_left_04.png",
+      "hem": 464
+    },
+    "walk-right-4": {
+      "file": "walk-right-4.png",
+      "bounds": [
+        138,
+        112,
+        278,
+        439
+      ],
+      "source": "walk-left-4.png, flipped (placeholder)",
+      "mirrored": true,
+      "hem": 464
+    },
+    "closed-smile": {
+      "file": "closed-smile.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        153,
+        111,
+        328,
+        440
+      ],
+      "hem": 490
+    },
+    "shy": {
+      "file": "shy.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        157,
+        111,
+        321,
+        440
+      ],
+      "hem": 490
+    },
+    "wave": {
+      "file": "wave.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        159,
+        112,
+        329,
+        439
+      ],
+      "hem": 490
+    },
+    "angry": {
+      "file": "angry.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        150,
+        113,
+        332,
+        439
+      ],
+      "hem": 490
+    },
+    "hang": {
+      "file": "hang.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        168,
+        114,
+        298,
+        438
+      ],
+      "hem": 490,
+      "grab": [
+        346,
+        158
+      ]
+    },
+    "struggle": {
+      "file": "struggle.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        173,
+        115,
+        308,
+        437
+      ],
+      "hem": 490,
+      "grab": [
+        366,
+        159
+      ]
+    },
+    "jump": {
+      "file": "jump.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        158,
+        148,
+        340,
+        404
+      ],
+      "hem": 490
+    },
+    "fall": {
+      "file": "fall.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        175,
+        140,
+        325,
+        412
+      ],
+      "hem": 490
+    },
+    "sleep": {
+      "file": "sleep.png",
+      "source": "Q 版 3x3 动作表情图（2026-11-17，第二版）",
+      "bounds": [
+        163,
+        118,
+        325,
+        434
+      ],
+      "hem": 490
+    },
+    "idle-shut": {
+      "file": "idle-shut.png",
+      "bounds": [
+        154,
+        112,
+        338,
+        440
+      ],
+      "source": "idle.png + closed-smile.png 的闭嘴部分（tools/idle_faces.py），其余像素与 idle 相同",
+      "hem": 490
+    },
+    "blink": {
+      "file": "blink.png",
+      "bounds": [
+        154,
+        112,
+        338,
+        440
+      ],
+      "source": "idle.png + closed-smile.png 的闭眼部分（tools/idle_faces.py），其余像素与 idle 相同",
+      "hem": 490
+    },
+    "blink-shut": {
+      "file": "blink-shut.png",
+      "bounds": [
+        154,
+        112,
+        338,
+        440
+      ],
+      "source": "idle.png + closed-smile.png 的闭眼闭嘴部分（tools/idle_faces.py），其余像素与 idle 相同",
+      "hem": 490
+    },
+    "stroll-left-01": {
+      "file": "stroll-left-01.png",
+      "bounds": [
+        234,
+        123,
+        248,
+        428
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 8 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-02": {
+      "file": "stroll-left-02.png",
+      "bounds": [
+        233,
+        116,
+        278,
+        435
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 1 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-03": {
+      "file": "stroll-left-03.png",
+      "bounds": [
+        237,
+        116,
+        272,
+        435
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 2 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-04": {
+      "file": "stroll-left-04.png",
+      "bounds": [
+        238,
+        116,
+        259,
+        435
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 4 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-05": {
+      "file": "stroll-left-05.png",
+      "bounds": [
+        236,
+        117,
+        262,
+        434
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 3 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-06": {
+      "file": "stroll-left-06.png",
+      "bounds": [
+        235,
+        118,
+        260,
+        433
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 5 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-07": {
+      "file": "stroll-left-07.png",
+      "bounds": [
+        236,
+        119,
+        260,
+        432
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 7 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-08": {
+      "file": "stroll-left-08.png",
+      "bounds": [
+        234,
+        123,
+        248,
+        428
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 8 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-09": {
+      "file": "stroll-left-09.png",
+      "bounds": [
+        233,
+        116,
+        278,
+        435
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 1 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-10": {
+      "file": "stroll-left-10.png",
+      "bounds": [
+        237,
+        116,
+        272,
+        435
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 2 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-11": {
+      "file": "stroll-left-11.png",
+      "bounds": [
+        238,
+        116,
+        259,
+        435
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 4 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-12": {
+      "file": "stroll-left-12.png",
+      "bounds": [
+        236,
+        117,
+        262,
+        434
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 3 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-13": {
+      "file": "stroll-left-13.png",
+      "bounds": [
+        235,
+        118,
+        260,
+        433
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 5 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-left-14": {
+      "file": "stroll-left-14.png",
+      "bounds": [
+        236,
+        119,
+        260,
+        432
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝左，2026-11-17）第 7 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-01": {
+      "file": "stroll-right-01.png",
+      "bounds": [
+        128,
+        112,
+        281,
+        439
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 4 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-02": {
+      "file": "stroll-right-02.png",
+      "bounds": [
+        128,
+        111,
+        279,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 5 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-03": {
+      "file": "stroll-right-03.png",
+      "bounds": [
+        128,
+        113,
+        279,
+        438
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 6 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-04": {
+      "file": "stroll-right-04.png",
+      "bounds": [
+        130,
+        111,
+        276,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 7 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-05": {
+      "file": "stroll-right-05.png",
+      "bounds": [
+        126,
+        111,
+        281,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 2 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-06": {
+      "file": "stroll-right-06.png",
+      "bounds": [
+        127,
+        111,
+        279,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 3 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-07": {
+      "file": "stroll-right-07.png",
+      "bounds": [
+        128,
+        112,
+        281,
+        439
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 4 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-08": {
+      "file": "stroll-right-08.png",
+      "bounds": [
+        128,
+        111,
+        279,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 5 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-09": {
+      "file": "stroll-right-09.png",
+      "bounds": [
+        128,
+        113,
+        279,
+        438
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 6 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-10": {
+      "file": "stroll-right-10.png",
+      "bounds": [
+        130,
+        111,
+        276,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 7 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-11": {
+      "file": "stroll-right-11.png",
+      "bounds": [
+        126,
+        111,
+        281,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 2 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "stroll-right-12": {
+      "file": "stroll-right-12.png",
+      "bounds": [
+        127,
+        111,
+        279,
+        440
+      ],
+      "hem": 490,
+      "source": "GPT 步行精灵表（朝右，2026-11-17）第 3 帧；手臂摆动由 tools/arm_swing.py 统一"
+    }
+  },
+  "states": {
+    "idle": [
+      "idle"
+    ],
+    "blink": [
+      "idle"
+    ],
+    "lookAround": [
+      "idle"
+    ],
+    "talking": [
+      "idle"
+    ],
+    "walkLeft": [
+      "stroll-left-06"
+    ],
+    "walkRight": [
+      "stroll-right-05"
+    ],
+    "run": [
+      "walk-left-1"
+    ],
+    "run:right": [
+      "walk-right-1"
+    ],
+    "turnLeft": [
+      "left"
+    ],
+    "turnRight": [
+      "right"
+    ],
+    "jump": [
+      "jump"
+    ],
+    "happy": [
+      "wave",
+      "closed-smile"
+    ],
+    "petting": [
+      "closed-smile"
+    ],
+    "shy": [
+      "shy"
+    ],
+    "angry": [
+      "angry"
+    ],
+    "sleeping": [
+      "sleep"
+    ],
+    "waking": [
+      "idle"
+    ],
+    "dragStart": [
+      "hang"
+    ],
+    "dragging": [
+      "hang"
+    ],
+    "struggling": [
+      "struggle"
+    ],
+    "falling": [
+      "fall"
+    ],
+    "landing": [
+      "idle"
+    ]
+  },
+  "sequences": {
+    "walkLeft": {
+      "frames": [
+        "stroll-left-01",
+        "stroll-left-02",
+        "stroll-left-03",
+        "stroll-left-04",
+        "stroll-left-05",
+        "stroll-left-06",
+        "stroll-left-07",
+        "stroll-left-08",
+        "stroll-left-09",
+        "stroll-left-10",
+        "stroll-left-11",
+        "stroll-left-12",
+        "stroll-left-13",
+        "stroll-left-14"
+      ],
+      "frameDurationMs": 90,
+      "stepLength": 95,
+      "stepsPerCycle": 2,
+      "blend": true
+    },
+    "walkRight": {
+      "frames": [
+        "stroll-right-01",
+        "stroll-right-02",
+        "stroll-right-03",
+        "stroll-right-04",
+        "stroll-right-05",
+        "stroll-right-06",
+        "stroll-right-07",
+        "stroll-right-08",
+        "stroll-right-09",
+        "stroll-right-10",
+        "stroll-right-11",
+        "stroll-right-12"
+      ],
+      "frameDurationMs": 90,
+      "stepLength": 95,
+      "stepsPerCycle": 2,
+      "blend": true
+    },
+    "run:left": {
+      "frames": [
+        "walk-left-1",
+        "walk-left-2",
+        "walk-left-3",
+        "walk-left-4"
+      ],
+      "frameDurationMs": 95,
+      "stepLength": 150
+    },
+    "run:right": {
+      "frames": [
+        "walk-right-1",
+        "walk-right-2",
+        "walk-right-3",
+        "walk-right-4"
+      ],
+      "frameDurationMs": 95,
+      "approximateMirroring": true,
+      "stepLength": 150
+    }
+  },
+  "procedural": {
+    "lookAround": "tilt",
+    "talking": "bob",
+    "waking": "stretch",
+    "landing": "squash",
+    "run": "慢跑帧（原\"行走帧\"）；向右跑是向左跑的镜像"
+  },
+  "missing": [
+    "wink",
+    "landing",
+    "running",
+    "run_right_original"
+  ],
+  "walkSpeedScale": 0.9,
+  "mouth": {
+    "open": "idle",
+    "closed": "idle-shut"
+  }
+}

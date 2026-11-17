@@ -1,0 +1,6 @@
+{
+  "name": "pick-random",
+  "version": "1.0.0",
+  "description": "示例插件：从一组选项里随机挑一个（帮你决定中午吃什么）",
+  "main": "index.js"
+}

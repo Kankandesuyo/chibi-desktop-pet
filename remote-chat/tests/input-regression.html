@@ -1,0 +1,6 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'"><title>桌宠电脑操作测试</title><style>
+body{margin:24px;background:#fff8f0;color:#5a2e14;font:16px 'Microsoft YaHei UI',sans-serif}h1{font-size:24px}#scrollbox{width:620px;height:280px;overflow:scroll;border:3px solid #f07a2a;background:white}#rows{width:1400px}p{padding:8px 16px;margin:0;height:46px;border-bottom:1px solid #f0d9c4}#position{padding:18px 0}
+</style></head><body><h1>Win 键与滚动测试</h1><div>仅本地合成页面，不连接微信，不读取个人文件。</div><div id="position">滚动位置：0，0</div><div id="scrollbox"><div id="rows"></div></div><script>
+for(let i=1;i<=35;i++){const p=document.createElement('p');p.textContent='第 '+i+' 行 — 垂直与水平滚动测试 — '+ '测试内容　'.repeat(20);document.querySelector('#rows').append(p)}
+document.querySelector('#scrollbox').onscroll=e=>{document.querySelector('#position').textContent='滚动位置：'+e.target.scrollLeft+'，'+e.target.scrollTop};
+</script></body></html>

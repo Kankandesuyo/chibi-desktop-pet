@@ -1,0 +1,75 @@
+{
+  "name": "chibi-desktop-pet",
+  "version": "0.1.0",
+  "description": "Q版智能互动桌宠 (Electron + React + PixiJS)",
+  "author": "神",
+  "private": true,
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "dev": "npm run build:electron && concurrently -k -n vite,electron \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:renderer": "vite build",
+    "build": "npm run typecheck && npm run build:electron && npm run build:renderer",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit && tsc -p tsconfig.agent-tests.json",
+    "test": "vitest run",
+    "dist": "npm run build && electron-builder --win nsis --x64",
+    "smoke": "npm run build && cross-env PET_SMOKE_DIR=./smoke-out electron .",
+    "pack": "npm run build && electron-builder --win dir --x64"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "cross-env": "^10.1.0",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0",
+    "pixi.js": "^8.23.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0",
+    "wait-on": "^9.5.1",
+    "zustand": "^5.1.0"
+  },
+  "build": {
+    "appId": "com.shen.chibidesktoppet",
+    "productName": "Chibi Desktop Pet",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "build/icon.png",
+      "build/icon-deepseek.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Chibi Desktop Pet"
+    },
+    "asar": {
+      "smartUnpack": false
+    }
+  },
+  "dependencies": {
+    "playwright-core": "^1.65.1"
+  }
+}
