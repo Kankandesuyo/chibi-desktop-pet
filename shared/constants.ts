@@ -59,6 +59,15 @@ export const IPC = {
   petPoint: 'evt:pet-point',
   /** main -> highlight overlay: draw the ring. */
   highlight: 'evt:highlight',
+  // files dropped on the pet
+  /** pet -> main: absolute paths of what was dropped on her. */
+  filesDropped: 'pet:files-dropped',
+  /** chat -> main: fetch (and clear) the pending "do something with these files" request. */
+  chatTakeCompose: 'chat:take-compose',
+  /** main -> pet: cursor position inside the pet window, polled (Windows sends no mouse moves during a file drag). */
+  cursor: 'evt:cursor',
+  /** main -> chat: a compose request is waiting; call chatTakeCompose. */
+  chatCompose: 'evt:chat-compose',
 } as const;
 
 export function windowSizeFor(size: number): { width: number; height: number } {

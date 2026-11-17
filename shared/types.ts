@@ -1,5 +1,6 @@
 import type { CharacterId, CustomCharacterInfo, ThemeChoice } from './characters';
 import type { MonologueLevel } from './persona';
+import type { ChatCompose } from './fileDrop';
 /** Types and constants shared by the Electron main process and the renderer. */
 import type { AgentEvent, AgentInfo, AgentPetSignal, AgentSettings, AgentStepView, ConfirmDecision, ConfirmRequest, McpServerConfig, PlanStepView } from './agentTypes';
 
@@ -166,6 +167,16 @@ export interface PetAPI {
   onPetPoint(cb: (p: PointRequest) => void): () => void;
   /** Highlight overlay only: where to draw the ring (window-relative DIP). */
   onHighlight(cb: (h: HighlightRequest) => void): () => void;
+  // Files dropped on her
+  /** Real path of a dropped file ('' if it has none, e.g. dragged from a browser). */
+  pathForFile(file: File): string;
+  /** Pet window: these were dropped on her; main shows the "what should I do" menu. */
+  filesDropped(paths: string[]): void;
+  /** Pet window: cursor inside the window (window DIP), or null when it left. Polled by main. */
+  onCursor(cb: (p: { x: number; y: number } | null) => void): () => void;
+  /** Chat window: the pending request about dropped files, if any (taking it clears it). */
+  takeChatCompose(): Promise<ChatCompose | null>;
+  onChatCompose(cb: () => void): () => void;
   // Shared conversation (desktop chat + remote web page). Only present when the remote-chat add-on
   // (remote-chat/server.cjs, wired in by remote-chat/install.py) is installed; otherwise chat is local.
   sharedState?(): Promise<SharedChatSnapshot>;

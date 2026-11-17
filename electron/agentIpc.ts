@@ -1,6 +1,8 @@
-import { dialog, ipcMain, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
+import { dialog, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import type { AgentEvent, AgentInfo, ConfirmDecision } from '../shared/agentTypes';
 import { IPC } from '../shared/constants';
+import { dropActions, dropHeader } from '../shared/fileDrop';
+import { inspectDrop } from './fileDrop';
 import type { AgentSettingsPatch, Settings } from '../shared/types';
 import type { AgentRuntime } from './agent';
 import { sanitizeHistory, sanitizeStats, type ConfigStore } from './configStore';
@@ -74,6 +76,34 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
     if (o.type === 'approve' || o.type === 'setMcp' || o.type === 'reload') { await agent.plugins.reloadAll(); agent.applyGroups(); }
     return info();
   }, info);
+  // ---- files dropped on her: a menu of what she can do; a choice becomes a normal chat request ----
+  on(IPC.filesDropped, (e, paths) => {
+    if (e.sender.id !== windows.pet?.webContents.id) return;
+    const drop = inspectDrop(paths, agent.allowedRoots());
+    if (!drop) return;
+    const s = config.getSettings();
+    const ready = s.aiEnabled && !!config.getApiKey() && s.agent.enabled;
+    const busy = agent.controller.isRunning();
+    const outside = drop.items.filter((i) => !i.allowed).length;
+    const actions = dropActions(drop);
+    const note = (label: string): MenuItemConstructorOptions => ({ label, enabled: false });
+    const template: MenuItemConstructorOptions[] = [note(dropHeader(drop)), { type: 'separator' }];
+    if (!ready) {
+      template.push(note('要先在设置里打开 AI 和智能体模式'), { label: '打开设置…', click: () => windows.openPanel('settings') });
+    } else if (actions.length === 0) {
+      template.push(note('这些不在允许的文件夹里，她碰不到'), { label: '去设置里添加文件夹…', click: () => windows.openPanel('settings') });
+    } else {
+      if (outside) template.push(note(`有 ${outside} 个不在允许的文件夹里，先不管它们`));
+      if (busy) template.push(note('她还在忙上一个任务，可以先告诉她要做什么'));
+      for (const a of actions) {
+        const startsNow = a.compose.prompt !== undefined;
+        template.push({ label: a.label, enabled: !(busy && startsNow), click: () => windows.composeInChat(a.compose) });
+      }
+    }
+    Menu.buildFromTemplate(template).popup({ window: windows.pet ?? undefined });
+  });
+  ipcMain.handle(IPC.chatTakeCompose, (e) => (trusted(e) ? windows.takeCompose(e.sender.id) : null));
+
   on(IPC.agentOpenFolder, (_e, kind) => {
     const dir = kind === 'plugins' ? agent.plugins.pluginDir : agent.logger.logDir;
     void shell.openPath(dir);

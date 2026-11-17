@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { PetAPI } from '../shared/types';
 
 // NOTE: this file runs sandboxed, so it must not import anything except `electron` at runtime.
@@ -17,6 +17,7 @@ const C = {
   agentPlugins: 'agent:plugins', agentOpenFolder: 'agent:open-folder', agentEvent: 'evt:agent',
   charactersList: 'characters:list', charactersOpenFolder: 'characters:open-folder', charactersReloadPet: 'characters:reload-pet',
   charactersCreate: 'characters:create',
+  filesDropped: 'pet:files-dropped', chatTakeCompose: 'chat:take-compose', cursor: 'evt:cursor', chatCompose: 'evt:chat-compose',
 } as const;
 
 function listen<T>(channel: string) {
@@ -71,6 +72,12 @@ const api: PetAPI = {
   onVisibility: listen(C.visibility),
   onPetPoint: listen(C.petPoint),
   onHighlight: listen(C.highlight),
+  // A dropped File only carries its real path through webUtils (File.path is gone in current Electron).
+  pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
+  filesDropped: (paths) => ipcRenderer.send(C.filesDropped, paths),
+  onCursor: listen(C.cursor),
+  takeChatCompose: () => ipcRenderer.invoke(C.chatTakeCompose),
+  onChatCompose: listen(C.chatCompose),
 };
 
 contextBridge.exposeInMainWorld('petAPI', api);

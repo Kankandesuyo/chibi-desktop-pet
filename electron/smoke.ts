@@ -77,6 +77,35 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
   if (chat) fs.writeFileSync(path.join(dir, '9_chat.png'), (await chat.webContents.capturePage()).toPNG());
   log.push({ step: '9_chat', chatOpen: Boolean(chat), chatBounds: chat?.getBounds() });
 
+  // ---- files dropped on her ----
+  // A synthetic drop (a File made in the page has no real path): she must take it on her body only and
+  // say she could not get a real file. Then the chat gets a "these files" hand-off and shows the chip.
+  const dropAt = (x: number, y: number): Promise<unknown> => wc.executeJavaScript(`(() => {
+    const dt = new DataTransfer(); dt.items.add(new File(['x'], 'a.txt'));
+    const ev = (t) => new DragEvent(t, { clientX: ${x}, clientY: ${y}, dataTransfer: dt, bubbles: true, cancelable: true });
+    const over = ev('dragover'); window.dispatchEvent(over);
+    window.dispatchEvent(ev('drop'));
+    return over.defaultPrevented;
+  })()`);
+  const acceptedOff = await dropAt(2, 2);
+  await sleep(200);
+  const bubbleOff = (await wc.executeJavaScript('document.querySelector(".pet-bubble")?.textContent ?? ""')) as string;
+  const acceptedOn = await dropAt(body.x, body.y);
+  await sleep(300);
+  const bubbleOn = (await wc.executeJavaScript('document.querySelector(".pet-bubble")?.textContent ?? ""')) as string;
+  await snap('9b_file_drop');
+  let chipText = '';
+  if (chat) {
+    windows.composeInChat({ paths: [path.join(app.getPath('desktop'), '某个文件.txt'), path.join(app.getPath('desktop'), '另一个.png')], hint: '想让她对这些文件做什么？' });
+    await sleep(600);
+    chipText = (await chat.webContents.executeJavaScript('document.querySelector(".chat-attach span")?.textContent ?? ""')) as string;
+    const placeholder = (await chat.webContents.executeJavaScript('document.querySelector(".chat-form input")?.placeholder ?? ""')) as string;
+    fs.writeFileSync(path.join(dir, '9c_chat_attach.png'), (await chat.webContents.capturePage()).toPNG());
+    log.push({ step: '9c_chat_attach', chipText, placeholder });
+    await chat.webContents.executeJavaScript('document.querySelector(".chat-attach button")?.click(); "ok"');
+  }
+  log.push({ step: '9b_file_drop', acceptedOff, bubbleOff, acceptedOn, bubbleOn });
+
   // ---- agent mode, end to end through the real IPC, against a scripted OpenAI-compatible server ----
   if (chat) {
     const target = path.join(app.getPath('desktop'), '智能体冒烟测试');

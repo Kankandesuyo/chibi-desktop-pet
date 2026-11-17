@@ -9,6 +9,7 @@ import { BlinkController } from './BlinkController';
 import { DragController, type DragEvent } from './DragController';
 import { EffectLayer, type EffectKind } from './Effects';
 import { EmotionSystem } from './EmotionSystem';
+import { FileDropController } from './FileDropController';
 import { InteractionController, type InteractionHost } from './InteractionController';
 import { MovementController } from './MovementController';
 import { PetStateMachine } from './PetStateMachine';
@@ -55,6 +56,7 @@ export class PetEngine implements InteractionHost {
   private emotion!: EmotionSystem;
   private movement!: MovementController;
   private interaction: InteractionController | null = null;
+  private fileDrop: FileDropController | null = null;
 
   private settings: Settings;
   private clock = 0;
@@ -112,6 +114,13 @@ export class PetEngine implements InteractionHost {
     this.unsubscribe.push(() => document.removeEventListener('visibilitychange', onVisibility));
 
     this.interaction = new InteractionController(canvas, this);
+    this.fileDrop = new FileDropController({
+      hitTest: (x, y) => this.hitTest(x, y),
+      onFileHover: () => this.onFileHover(),
+      onFileHoverEnd: () => { if (this.machine.state !== 'petting') this.leanTarget = 0; },
+      onFilesDropped: (files) => this.onFilesDropped(files),
+    });
+    this.unsubscribe.push(this.api.onCursor((p) => this.interaction?.cursorAt(p)));
     this.app.ticker.add((ticker) => this.tick(Math.min(0.05, ticker.deltaMS / 1000)));
     this.hooks.onReady(this.sprites.warnings);
     for (const w of this.sprites.warnings) console.warn('[assets]', w);
@@ -534,6 +543,30 @@ export class PetEngine implements InteractionHost {
 
   onContextMenu(): void { this.api.showContextMenu(); }
 
+  isFileDragging(): boolean { return this.fileDrop?.isActive() ?? false; }
+
+  // ------------------------------------------------------------------ files dropped on her
+  private onFileHover(): void {
+    const m = this.machine;
+    if (m.state === 'sleeping') m.request('waking');
+    this.spawn('exclaim', 0, 0);
+    this.leanTarget = 0.6;                                     // leans in to take it
+    this.hooks.say(pick(LINES.fileHover), 1400);
+  }
+
+  private onFilesDropped(files: File[]): void {
+    this.leanTarget = 0;
+    const paths = files.map((f) => this.api.pathForFile(f)).filter((p) => p.length > 0);
+    if (paths.length === 0) { this.spawn('question', 34, 10); this.hooks.say(pick(LINES.fileNoPath), 2400); return; }
+    this.emotion.onClick();
+    this.sound.play('pop');
+    this.spawn('heart', 0, 0);
+    this.poseOverride = 'wave';
+    if (!this.machine.request('happy')) this.poseOverride = null;
+    this.hooks.say(pick(LINES.fileDrop), 2000);
+    this.api.filesDropped(paths);
+  }
+
   // ------------------------------------------------------------------ teardown
   destroy(): void {
     this.destroyed = true;
@@ -541,6 +574,8 @@ export class PetEngine implements InteractionHost {
     this.unsubscribe.length = 0;
     this.interaction?.destroy();
     this.interaction = null;
+    this.fileDrop?.destroy();
+    this.fileDrop = null;
     if (this.statsTimer !== null) { window.clearTimeout(this.statsTimer); this.api.saveStats(this.emotion.stats); }
     this.sound.destroy();
     try {

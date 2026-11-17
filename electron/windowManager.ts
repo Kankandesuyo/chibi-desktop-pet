@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import {
   CHARACTER_HALF_WIDTH, CHARACTER_HEIGHT, FOOT_MARGIN, IPC, windowSizeFor,
 } from '../shared/constants';
+import type { ChatCompose } from '../shared/fileDrop';
 import type { DragUpdate, PetPlacement, Point, Rect } from '../shared/types';
 import type { ConfigStore } from './configStore';
 
@@ -18,6 +19,8 @@ const HIGHLIGHT_MS = 11000;
 export const ON_TOP_LEVEL = 'screen-saver';
 /** How often to check that Windows (or another app) has not demoted the pet from topmost. */
 const ON_TOP_CHECK_MS = 3000;
+/** Cursor poll for file drags (see pollCursor). Cheap: one cursor read, IPC only while over the window. */
+const CURSOR_POLL_MS = 40;
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 export const APP_ORIGIN = 'app://local';
@@ -51,8 +54,46 @@ export class WindowManager {
   private highlight: BrowserWindow | null = null;
   private highlightTimer: NodeJS.Timeout | null = null;
   private highlightId = 0;
+  private cursorTimer: NodeJS.Timeout | null = null;
+  private lastCursor: string | null = null;
+  /** "Do something with these files", waiting for the chat window to pick it up. */
+  private pendingCompose: ChatCompose | null = null;
 
   constructor(private readonly config: ConfigStore) {}
+
+  /**
+   * Tells the pet window where the cursor is while it is over the window. Normally the forwarded mouse
+   * moves do this, but while the user drags a file from Explorer Windows sends none, so without this she
+   * would stay click-through and could never become a drop target.
+   */
+  private pollCursor(): void {
+    const win = this.pet;
+    if (!win || win.isDestroyed() || !win.isVisible() || this.dragTimer) return;
+    const p = screen.getCursorScreenPoint();
+    const b = win.getBounds();
+    const inside = p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height;
+    const key = inside ? `${p.x - b.x},${p.y - b.y}` : null;
+    if (key === this.lastCursor) return;
+    this.lastCursor = key;
+    win.webContents.send(IPC.cursor, inside ? { x: p.x - b.x, y: p.y - b.y } : null);
+  }
+
+  /** Opens the chat and hands it a request about dropped files (it fetches it with takeCompose). */
+  composeInChat(c: ChatCompose): void {
+    this.pendingCompose = c;
+    this.openPanel('chat');
+    const win = this.panels.get('chat');
+    // A freshly created chat takes it itself once loaded; an open one is told now.
+    if (win && !win.isDestroyed() && !win.webContents.isLoading()) win.webContents.send(IPC.chatCompose);
+  }
+
+  takeCompose(webContentsId: number): ChatCompose | null {
+    const win = this.panels.get('chat');
+    if (!win || win.isDestroyed() || win.webContents.id !== webContentsId) return null;
+    const c = this.pendingCompose;
+    this.pendingCompose = null;
+    return c;
+  }
 
   private get size(): number { return this.config.getSettings().size; }
 
@@ -97,7 +138,12 @@ export class WindowManager {
     // Start click-through; the renderer turns capturing on only while the cursor is over the character.
     win.setIgnoreMouseEvents(true, { forward: true });
     win.once('ready-to-show', () => win.showInactive());
-    win.on('closed', () => { this.pet = null; this.stopDrag(); if (this.onTopTimer) clearInterval(this.onTopTimer); });
+    win.on('closed', () => {
+      this.pet = null; this.stopDrag();
+      if (this.onTopTimer) clearInterval(this.onTopTimer);
+      if (this.cursorTimer) clearInterval(this.cursorTimer);
+    });
+    this.cursorTimer = setInterval(() => this.pollCursor(), CURSOR_POLL_MS);
     void win.loadURL(pageUrl('pet'));
     this.pet = win;
 

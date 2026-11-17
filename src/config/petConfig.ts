@@ -75,6 +75,9 @@ export const LINES = {
   holdFast: ['呜哇——慢点！', '太快啦！', '要飞出去了！'],
   holdTired: ['要拎到什么时候呀…', '…随你吧。', '手不酸吗…'],
   holdLook: ['要带我去哪儿？', '好高…', '嗯…？'],
+  fileHover: ['给我的吗？', '要交给我吗？', '放这儿就行～'],
+  fileDrop: ['收到～要我做什么？', '接住啦！做点什么呢？'],
+  fileNoPath: ['这个我拿不到呀…', '从文件夹里拖给我吧'],
 } as const;
 
 export function pick<T>(list: readonly T[], rng: () => number = Math.random): T {

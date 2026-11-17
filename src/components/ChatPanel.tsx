@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type JSX } from 'react';
 import type { AgentStepView, ConfirmRequest, PlanStepView } from '../../shared/agentTypes';
-import type { PanelAction, PanelState } from '../../shared/types';
+import { withAttachments, type ChatCompose } from '../../shared/fileDrop';
+import type { PanelAction, PanelState, Settings } from '../../shared/types';
 import { useChatStore, type ChatMode } from '../store/chatStore';
 import { usePetStore } from '../store/petStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -42,6 +43,12 @@ function ConfirmCard({ req, onEdit }: { req: ConfirmRequest; onEdit: (prefix: st
   );
 }
 
+function modeOf(s: Settings): ChatMode {
+  return !(s.aiEnabled && s.ai.hasApiKey) ? 'offline' : s.agent.enabled ? 'agent' : 'chat';
+}
+
+const baseName = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+
 /** Chat window. In agent mode it also shows the plan, each tool step and confirmation cards. */
 export function ChatPanel(): JSX.Element {
   const { messages, streaming, requestId, notice, steps, plan, interim, confirms, send, stop, clear } = useChatStore();
@@ -50,16 +57,34 @@ export function ChatPanel(): JSX.Element {
   const [panel, setPanel] = useState<PanelState>({ pinned: false, sizeIndex: 1, sizeCount: 4 });
   const control = (a: PanelAction): void => { void window.petAPI.panelControl(a).then((s) => { if (s) setPanel(s); }); };
   const listRef = useRef<HTMLDivElement>(null);
-  const aiReady = settings.aiEnabled && settings.ai.hasApiKey;
-  const mode: ChatMode = !aiReady ? 'offline' : settings.agent.enabled ? 'agent' : 'chat';
+  const inputRef = useRef<HTMLInputElement>(null);
+  /** Files dropped on her that the next message is about (shown as a chip, appended on send). */
+  const [attached, setAttached] = useState<string[]>([]);
+  const [hint, setHint] = useState<string | null>(null);
+  const mode: ChatMode = modeOf(settings);
 
   useEffect(() => {
-    void window.petAPI.getInitialData().then((d) => {
+    const applyCompose = (c: ChatCompose | null): void => {
+      if (!c || c.paths.length === 0) return;
+      const chat = useChatStore.getState();
+      if (c.prompt && modeOf(useSettingsStore.getState().settings) === 'agent' && !chat.requestId) {
+        chat.send(c.prompt, 'agent', usePetStore.getState().stats);
+        return;
+      }
+      // Needs the user's words (or she is busy / agent mode is off): attach and let them type.
+      setAttached(c.paths);
+      setHint(c.prompt ? (chat.requestId ? '她还在忙上一个任务，等她做完再发' : '要先在设置里打开 AI 和智能体模式') : c.hint ?? null);
+      inputRef.current?.focus();
+    };
+    const takeCompose = (): void => { void window.petAPI.takeChatCompose().then(applyCompose); };
+    void window.petAPI.getInitialData().then(async (d) => {
       useSettingsStore.getState().apply(d.settings);
       usePetStore.getState().setStats(d.stats);
-      if (window.petAPI.sharedState) void window.petAPI.sharedState().then((s) => useChatStore.getState().sync(s));
+      if (window.petAPI.sharedState) useChatStore.getState().sync(await window.petAPI.sharedState());
       else useChatStore.getState().load(d.chatHistory);
+      takeCompose();                                          // only after the history is in, or it would be overwritten
     });
+    const offCompose = window.petAPI.onChatCompose(takeCompose);
     const offShared = window.petAPI.onSharedChat?.((s) => useChatStore.getState().sync(s));
     const offStream = window.petAPI.onAiStream((e) => useChatStore.getState().handleStream(e));
     const offAgent = window.petAPI.onAgentEvent((e) => useChatStore.getState().handleAgent(e));
@@ -67,7 +92,7 @@ export function ChatPanel(): JSX.Element {
     void window.petAPI.panelControl('state').then((s) => { if (s) setPanel(s); });
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') window.petAPI.closePanel(); };
     window.addEventListener('keydown', onKey);
-    return () => { offShared?.(); offStream(); offAgent(); offSettings(); window.removeEventListener('keydown', onKey); };
+    return () => { offCompose(); offShared?.(); offStream(); offAgent(); offSettings(); window.removeEventListener('keydown', onKey); };
   }, []);
 
   useEffect(() => {
@@ -76,8 +101,11 @@ export function ChatPanel(): JSX.Element {
 
   const submit = (e: FormEvent): void => {
     e.preventDefault();
-    send(text, mode, usePetStore.getState().stats);
+    if (!text.trim() || requestId) return;
+    send(withAttachments(text, attached), mode, usePetStore.getState().stats);
     setText('');
+    setAttached([]);
+    setHint(null);
   };
 
   const title = mode === 'offline' ? '和她聊天（离线模式）' : mode === 'agent' ? '和她聊天 · 智能体模式' : '和她聊天';
@@ -147,8 +175,14 @@ export function ChatPanel(): JSX.Element {
           window.addEventListener('pointerup', up);
         }}
       />
+      {attached.length > 0 && (
+        <div className="chat-attach" title={attached.join('\n')}>
+          <span>📎 {attached.length === 1 ? baseName(attached[0] as string) : `${baseName(attached[0] as string)} 等 ${attached.length} 个`}</span>
+          <button type="button" onClick={() => { setAttached([]); setHint(null); }} title="不带这些文件">×</button>
+        </div>
+      )}
       <form className="chat-form" onSubmit={submit}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={mode === 'agent' ? '聊天，或让她帮你做事…' : '输入消息，回车发送'} maxLength={1000} autoFocus />
+        <input ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} placeholder={hint ?? (mode === 'agent' ? '聊天，或让她帮你做事…' : '输入消息，回车发送')} maxLength={1000} autoFocus />
         {working ? <button type="button" onClick={stop}>停止</button> : <button type="submit" disabled={!text.trim()}>发送</button>}
       </form>
     </div>

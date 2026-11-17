@@ -11,6 +11,8 @@ export interface InteractionHost {
   onPet(direction: number): void;
   onHover(clientX: number | null, clientY: number | null): void;
   onContextMenu(): void;
+  /** A file is being dragged over the window (keep capturing even if the DOM says the mouse left). */
+  isFileDragging?(): boolean;
 }
 
 /**
@@ -49,8 +51,17 @@ export class InteractionController {
     this.host.setIgnoreMouse(ignore);
   }
 
-  private onLeave(): void {
+  /**
+   * Cursor position polled by the main process. Only used to switch click-through: it is what lets a
+   * file dragged from Explorer land on her, since Windows sends no mouse moves during such a drag.
+   */
+  cursorAt(p: { x: number; y: number } | null): void {
     if (this.dragging || this.pressed) return;
+    this.setIgnore(p === null ? true : !this.host.hitTest(p.x, p.y).hit);
+  }
+
+  private onLeave(): void {
+    if (this.dragging || this.pressed || this.host.isFileDragging?.()) return;
     this.setIgnore(true);
     this.host.onHover(null, null);
     this.lastMove = null;

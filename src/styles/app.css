@@ -62,6 +62,9 @@ body[data-view="pet"] { background: transparent; }
 .chat-form input:focus { border-color: var(--orange); }
 .chat-form button { border: 0; border-radius: 12px; padding: 0 14px; background: var(--orange); color: #fff; font-weight: 700; }
 .chat-form button:disabled { opacity: 0.45; cursor: default; }
+.chat-attach { display: flex; align-items: center; gap: 6px; margin: 0 10px -4px; padding: 4px 6px 4px 10px; border: 1px dashed var(--orange); border-radius: 10px; font-size: 12px; background: #fff; }
+.chat-attach span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-attach button { border: 0; background: none; font-size: 15px; line-height: 1; padding: 0 4px; cursor: pointer; color: inherit; }
 
 /* ---------- settings window ---------- */
 body[data-view="settings"] { background: var(--cream); overflow-y: auto; }
