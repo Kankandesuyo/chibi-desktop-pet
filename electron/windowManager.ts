@@ -8,6 +8,15 @@ import type { ConfigStore } from './configStore';
 
 export type PanelView = 'chat' | 'settings';
 
+/**
+ * Z-order level for "stay on top". On Windows Electron puts 'floating' (and status, main-menu, ...) windows
+ * just behind the taskbar and redoes that on every move, which the walking pet does many times a second;
+ * in practice the window then loses its topmost flag. 'screen-saver' is a plain topmost window.
+ */
+export const ON_TOP_LEVEL = 'screen-saver';
+/** How often to check that Windows (or another app) has not demoted the pet from topmost. */
+const ON_TOP_CHECK_MS = 3000;
+
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 export const APP_ORIGIN = 'app://local';
 
@@ -36,6 +45,7 @@ export class WindowManager {
   private feet: Point = { x: 0, y: 0 };
   private dragTimer: NodeJS.Timeout | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
+  private onTopTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly config: ConfigStore) {}
 
@@ -77,14 +87,19 @@ export class WindowManager {
       backgroundColor: '#00000000',
       webPreferences: this.webPreferences(),
     });
-    if (settings.alwaysOnTop) win.setAlwaysOnTop(true, 'floating');
+    if (settings.alwaysOnTop) win.setAlwaysOnTop(true, ON_TOP_LEVEL);
     win.setOpacity(settings.opacity);
     // Start click-through; the renderer turns capturing on only while the cursor is over the character.
     win.setIgnoreMouseEvents(true, { forward: true });
     win.once('ready-to-show', () => win.showInactive());
-    win.on('closed', () => { this.pet = null; this.stopDrag(); });
+    win.on('closed', () => { this.pet = null; this.stopDrag(); if (this.onTopTimer) clearInterval(this.onTopTimer); });
     void win.loadURL(pageUrl('pet'));
     this.pet = win;
+
+    // Keep her on top when the setting says so: re-assert right away if something demotes the window,
+    // and check now and then because Windows does not always report it.
+    win.on('always-on-top-changed', (_e, onTop) => { if (!onTop) setImmediate(() => this.keepOnTop()); });
+    this.onTopTimer = setInterval(() => this.keepOnTop(), ON_TOP_CHECK_MS);
 
     const recheck = (): void => this.recorrectPosition();
     screen.on('display-metrics-changed', recheck);
@@ -173,17 +188,24 @@ export class WindowManager {
     this.sendPlacement();
   }
 
+  /** Re-applies "stay on top" if the setting is on but the window lost it. */
+  keepOnTop(): void {
+    const pet = this.pet;
+    if (!pet || pet.isDestroyed() || !pet.isVisible() || !this.config.getSettings().alwaysOnTop) return;
+    if (!pet.isAlwaysOnTop()) pet.setAlwaysOnTop(true, ON_TOP_LEVEL);
+  }
+
   applySettingsToWindows(): void {
     const s = this.config.getSettings();
     if (!this.pet || this.pet.isDestroyed()) return;
-    this.pet.setAlwaysOnTop(s.alwaysOnTop, 'floating');
+    this.pet.setAlwaysOnTop(s.alwaysOnTop, ON_TOP_LEVEL);
     this.pet.setOpacity(s.opacity);
     this.recorrectPosition();        // also applies a new size, keeping her feet where they are
   }
 
   setPetVisible(visible: boolean): void {
     if (!this.pet || this.pet.isDestroyed()) return;
-    if (visible) this.pet.showInactive(); else this.pet.hide();
+    if (visible) { this.pet.showInactive(); this.keepOnTop(); } else this.pet.hide();
     this.pet.webContents.send(IPC.visibility, visible);
   }
 
@@ -230,7 +252,7 @@ export class WindowManager {
     });
     win.setMenuBarVisibility(false);
     win.once('ready-to-show', () => win.show());
-    if (view === 'chat' && this.chatPinned) win.setAlwaysOnTop(true, 'floating');
+    if (view === 'chat' && this.chatPinned) win.setAlwaysOnTop(true, ON_TOP_LEVEL);
     win.on('closed', () => this.panels.delete(view));
     void win.loadURL(pageUrl(view));
     this.panels.set(view, win);
@@ -261,7 +283,7 @@ export class WindowManager {
     if (!win || win.isDestroyed() || win.webContents.id !== webContentsId) return state();
     if (action === 'toggle-pin') {
       this.chatPinned = !this.chatPinned;
-      win.setAlwaysOnTop(this.chatPinned, 'floating');
+      win.setAlwaysOnTop(this.chatPinned, ON_TOP_LEVEL);
     } else if (action === 'bigger' || action === 'smaller') {
       this.chatSize = Math.max(0, Math.min(WindowManager.CHAT_SIZES.length - 1, this.chatSize + (action === 'bigger' ? 1 : -1)));
       const next = this.fitToScreen(WindowManager.CHAT_SIZES[this.chatSize] as { width: number; height: number });
