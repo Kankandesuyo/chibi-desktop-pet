@@ -80,7 +80,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   const executor = new ToolExecutor(registry, permissions, new TaskVerifier(), logger, redactor, o.platform, services);
   controller = new AgentController({
     registry, executor, permissions, planner, memory, logger, llm: o.llm, platform: o.platform,
-    settings: o.settings, allowedRoots, persona: o.persona,
+    settings: o.settings, allowedRoots, persona: o.persona, redact: (s) => redactor.text(s),
   });
   const plugins = new ToolPluginManager(registry, path.join(o.baseDir, 'plugins'), o.approvals, o.mcpServers);
   const applyGroups = (): void => registry.setEnabledGroups(o.settings().toolGroups);

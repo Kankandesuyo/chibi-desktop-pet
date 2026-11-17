@@ -29,6 +29,25 @@ export class ToolsUnsupportedError extends Error {}
 
 const TIMEOUT_MS = 90_000;
 
+/** Plain chat / vision answers are short. */
+export const DEFAULT_MAX_TOKENS = 1500;
+/** Turns that may call tools: arguments (file contents, long move lists) need room or they get cut mid-JSON. */
+export const TOOL_TURN_MAX_TOKENS = 8192;
+const MIN_RETRY_TOKENS = 1024;
+
+/**
+ * If a 400 body says max_tokens is too big, returns a smaller value to retry with, else null.
+ * Understands "valid range of max_tokens is [1, 8192]" and "supports at most 4096 completion tokens";
+ * otherwise halves (never below MIN_RETRY_TOKENS).
+ */
+export function maxTokensLimitFrom(body: string, requested: number): number | null {
+  if (!/max_tokens|max_completion_tokens|maximum.{0,40}tokens|completion tokens/i.test(body)) return null;
+  const nums = [...body.matchAll(/\b(\d{3,6})\b/g)].map((m) => Number(m[1])).filter((n) => n >= MIN_RETRY_TOKENS && n < requested);
+  const stated = nums.length ? Math.max(...nums) : null;
+  const next = stated ?? Math.floor(requested / 2);
+  return next >= MIN_RETRY_TOKENS && next < requested ? next : null;
+}
+
 /** Accumulates an OpenAI-style SSE stream, including tool_calls that arrive in pieces. */
 export function createTurnParser(): { feed(chunk: string): string[]; finish(): LlmTurn; done(): boolean } {
   let buffer = '';
@@ -100,12 +119,28 @@ async function post(cfg: EndpointConfig, body: Record<string, unknown>, signal: 
 
 /** Any OpenAI-compatible endpoint (DeepSeek, OpenAI, Qwen, a local server…), streaming, with native tool calling. */
 export class OpenAiCompatibleClient implements LlmClient {
+  /** Highest max_tokens this endpoint accepted after rejecting a bigger one (per base URL + model). */
+  private readonly tokenCaps = new Map<string, number>();
+
   constructor(private readonly config: () => EndpointConfig) {}
 
   async complete(req: LlmRequest): Promise<LlmTurn> {
-    const body: Record<string, unknown> = { stream: true, temperature: 0.3, max_tokens: req.maxTokens ?? 1500, messages: req.messages };
-    if (req.tools && req.tools.length) { body.tools = req.tools; body.tool_choice = 'auto'; }
-    const res = await post(this.config(), body, req.signal);
+    const cfg = this.config();
+    const capKey = `${cfg.baseUrl}|${cfg.model}`;
+    let maxTokens = Math.min(req.maxTokens ?? DEFAULT_MAX_TOKENS, this.tokenCaps.get(capKey) ?? Infinity);
+    let res: Response;
+    for (;;) {
+      const body: Record<string, unknown> = { stream: true, temperature: 0.3, max_tokens: maxTokens, messages: req.messages };
+      if (req.tools && req.tools.length) { body.tools = req.tools; body.tool_choice = 'auto'; }
+      res = await post(cfg, body, req.signal);
+      if (res.ok || res.status !== 400) break;
+      // Some endpoints reject a max_tokens above their limit: retry once with what they accept.
+      const text = await res.clone().text().catch(() => '');
+      const lower = maxTokensLimitFrom(text, maxTokens);
+      if (lower === null) break;
+      maxTokens = lower;
+      this.tokenCaps.set(capKey, lower);
+    }
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       if (req.tools && (res.status === 400 || res.status === 422) && /tool|function/i.test(text)) {
