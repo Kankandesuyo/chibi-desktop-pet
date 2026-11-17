@@ -35,6 +35,7 @@ export const STATE_SPECS: Record<PetState, StateSpec> = {
   talking: { priority: PRIORITY.talk, duration: 30, next: 'idle' },
   // The engine sets the real length (whole bites of the drawn sequence); this range is only a safety net.
   eating: { priority: PRIORITY.auto, duration: [3, 9], next: 'idle' },
+  pointing: { priority: PRIORITY.interact, duration: 4, next: 'idle' },
 };
 
 const DRAG_GROUP: readonly PetState[] = ['dragStart', 'dragging', 'struggling'];

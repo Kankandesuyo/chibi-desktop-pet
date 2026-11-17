@@ -8,6 +8,7 @@ import { createTurnParser, OpenAiCompatibleClient, parseJsonToolCall, ToolsUnsup
 import { launchSpec } from '../../electron/agent/mcpClient';
 import { toSendKeys, escapeSendKeys } from '../../electron/agent/platform/windowsShell';
 import { splitArgs } from '../../electron/agent/platform/splitArgs';
+import { parseScreenFinding } from '../../electron/agent/tools/memoryUiTools';
 import { Redactor, isSensitiveFile } from '../../electron/agent/redact';
 import { validate } from '../../electron/agent/schema';
 import { call, finalSteps, lastToolResult, makeHarness, say, type Harness } from './helpers';
@@ -292,5 +293,38 @@ describe('screenshot + vision', () => {
     expect(r.confirms).toHaveLength(1);
     expect(r.confirms[0]?.risk).toBe('high');
     expect(r.done?.outcome).toBe('success');
+  });
+});
+
+describe('pointing at the screen', () => {
+  it('asks first, then shows the spot the vision model found (as fractions of the screen)', async () => {
+    const shown: unknown[] = [];
+    h = makeHarness([call('point_on_screen', { what: '保存按钮' }), (m) => { expect(lastToolResult(m).ok).toBe(true); return say('在右上角'); }], {
+      vision: async (q) => { expect(q).toContain('保存按钮'); return '好的：```json\n{"found":true,"x":900,"y":50,"label":"保存","note":"点它保存文件"}\n```'; },
+      pointAt: (t) => shown.push(t),
+    });
+    const r = await h.run('保存按钮在哪');
+    expect(r.confirms).toHaveLength(1);
+    expect(r.confirms[0]?.risk).toBe('high');
+    expect(shown).toEqual([{ nx: 0.9, ny: 0.05, label: '保存', note: '点它保存文件' }]);
+    expect(r.done?.outcome).toBe('success');
+  });
+
+  it('shows nothing when the user declines, or when the thing is not on screen', async () => {
+    const shown: unknown[] = [];
+    h = makeHarness([call('point_on_screen', { what: '保存按钮' }), say('好的不看')], { vision: async () => '{"found":true,"x":1,"y":1}', pointAt: (t) => shown.push(t) });
+    await h.run('保存按钮在哪', { decide: () => 'deny' });
+    h.cleanup();
+    h = makeHarness([call('point_on_screen', { what: '保存按钮' }), (m) => { expect(lastToolResult(m).ok).toBe(false); return say('没找到'); }], {
+      vision: async () => '{"found":false,"note":"屏幕上没有保存按钮"}', pointAt: (t) => shown.push(t),
+    });
+    await h.run('保存按钮在哪');
+    expect(shown).toEqual([]);
+  });
+
+  it('rejects answers without usable coordinates', () => {
+    expect(() => parseScreenFinding('我看不清')).toThrow(/没有按要求/);
+    expect(() => parseScreenFinding('{"found":true,"x":2000,"y":10}')).toThrow(/坐标无效/);
+    expect(parseScreenFinding('{"found":true,"x":0,"y":1000,"label":"a\\u0000b"}')).toEqual({ found: true, nx: 0, ny: 1, label: 'a b', note: '' });
   });
 });

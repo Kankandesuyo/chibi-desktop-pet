@@ -55,6 +55,10 @@ export const IPC = {
   aiStream: 'evt:ai-stream',
   petNotify: 'evt:pet-notify',
   visibility: 'evt:visibility',
+  /** main -> pet: walk over and point at a spot on screen. */
+  petPoint: 'evt:pet-point',
+  /** main -> highlight overlay: draw the ring. */
+  highlight: 'evt:highlight',
 } as const;
 
 export function windowSizeFor(size: number): { width: number; height: number } {

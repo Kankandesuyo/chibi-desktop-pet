@@ -19,7 +19,7 @@ import { devTools, ProcessManager } from './tools/devTools';
 import { fileTools } from './tools/fileTools';
 import { adminTools } from './tools/adminTools';
 import { memoryTools, uiTools } from './tools/memoryUiTools';
-import type { AgentServices, DesktopPlatform } from './types';
+import type { AgentServices, DesktopPlatform, ScreenTarget } from './types';
 
 export interface AgentRuntimeOptions {
   /** Where memory, logs, journal and plugins live. */
@@ -28,6 +28,8 @@ export interface AgentRuntimeOptions {
   llm: LlmClient;
   settings(): AgentSettings;
   vision(pngPath: string, question: string, signal: AbortSignal): Promise<string>;
+  /** Shows a spot on screen to the user (see AgentServices.pointAt). */
+  pointAt?(target: ScreenTarget): void;
   /** Exact strings that must never reach the log or the model (e.g. the API keys). */
   secrets(): string[];
   browser(): BrowserOptions;
@@ -74,7 +76,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   const journal = new FileJournal(o.baseDir);
   const processes = new ProcessManager();
   const browser = new BrowserSession(o.browser);
-  const services: AgentServices = { memory, planner, journal, processes, browser, vision: o.vision };
+  const services: AgentServices = { memory, planner, journal, processes, browser, vision: o.vision, ...(o.pointAt ? { pointAt: o.pointAt } : {}) };
   const executor = new ToolExecutor(registry, permissions, new TaskVerifier(), logger, redactor, o.platform, services);
   controller = new AgentController({
     registry, executor, permissions, planner, memory, logger, llm: o.llm, platform: o.platform,

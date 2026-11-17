@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ChatPanel } from './components/ChatPanel';
+import { HighlightView } from './components/HighlightView';
 import { PetView } from './components/PetView';
 import { SettingsPanel } from './components/SettingsPanel';
 import { resolveTheme, type CustomCharacterInfo } from '../shared/characters';
@@ -32,4 +33,5 @@ useSettingsStore.subscribe(applyTheme);
 const root = createRoot(document.getElementById('root') as HTMLElement);
 if (view === 'chat') root.render(<StrictMode><ChatPanel /></StrictMode>);
 else if (view === 'settings') root.render(<StrictMode><SettingsPanel /></StrictMode>);
+else if (view === 'highlight') root.render(<StrictMode><HighlightView /></StrictMode>);
 else root.render(<PetView />);   // no StrictMode here: it would start the WebGL engine twice in dev

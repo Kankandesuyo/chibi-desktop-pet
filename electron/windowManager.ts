@@ -7,6 +7,8 @@ import type { DragUpdate, PetPlacement, Point, Rect } from '../shared/types';
 import type { ConfigStore } from './configStore';
 
 export type PanelView = 'chat' | 'settings';
+/** How long the ring stays on screen. */
+const HIGHLIGHT_MS = 11000;
 
 /**
  * Z-order level for "stay on top". On Windows Electron puts 'floating' (and status, main-menu, ...) windows
@@ -20,7 +22,7 @@ const ON_TOP_CHECK_MS = 3000;
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 export const APP_ORIGIN = 'app://local';
 
-function pageUrl(view: 'pet' | PanelView): string {
+function pageUrl(view: 'pet' | 'highlight' | PanelView): string {
   return `${DEV_URL ?? APP_ORIGIN}/index.html#${view}`;
 }
 
@@ -46,6 +48,9 @@ export class WindowManager {
   private dragTimer: NodeJS.Timeout | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
   private onTopTimer: NodeJS.Timeout | null = null;
+  private highlight: BrowserWindow | null = null;
+  private highlightTimer: NodeJS.Timeout | null = null;
+  private highlightId = 0;
 
   constructor(private readonly config: ConfigStore) {}
 
@@ -186,6 +191,47 @@ export class WindowManager {
     const wa = this.displayFor(this.feet).workArea;
     this.applyFeet(clampFeet(this.feet, wa, this.size));
     this.sendPlacement();
+  }
+
+  /**
+   * Shows the user a spot on the primary display (fractions of its size, as the vision model saw the screenshot):
+   * a ring on a click-through overlay, and the pet walks over to point at it.
+   */
+  pointAt(t: { nx: number; ny: number; label: string; note?: string }): void {
+    const b = screen.getPrimaryDisplay().bounds;
+    const clamp = (v: number): number => Math.min(1, Math.max(0, v));
+    const point = { x: Math.round(b.x + clamp(t.nx) * b.width), y: Math.round(b.y + clamp(t.ny) * b.height) };
+    const label = t.label.slice(0, 40);
+    this.showHighlight(b, { x: point.x - b.x, y: point.y - b.y, label, id: ++this.highlightId });
+    this.sendToPet(IPC.petPoint, { point, label, note: (t.note ?? '').slice(0, 200) });
+  }
+
+  private showHighlight(bounds: Rect, ring: { x: number; y: number; label: string; id: number }): void {
+    let win = this.highlight;
+    const show = (w: BrowserWindow): void => {
+      if (w.isDestroyed()) return;
+      w.webContents.send(IPC.highlight, ring);
+      w.showInactive();
+      w.setAlwaysOnTop(true, ON_TOP_LEVEL);
+    };
+    if (!win || win.isDestroyed()) {
+      win = new BrowserWindow({
+        ...bounds, transparent: true, frame: false, resizable: false, movable: false, focusable: false,
+        minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, hasShadow: false,
+        show: false, alwaysOnTop: true, backgroundColor: '#00000000', webPreferences: this.webPreferences(),
+      });
+      win.setIgnoreMouseEvents(true);                   // never in the way: every click goes to what is underneath
+      win.on('closed', () => { this.highlight = null; });
+      this.highlight = win;
+      const created = win;
+      created.webContents.once('did-finish-load', () => show(created));
+      void created.loadURL(pageUrl('highlight'));
+    } else {
+      win.setBounds(bounds);
+      show(win);
+    }
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    this.highlightTimer = setTimeout(() => { if (this.highlight && !this.highlight.isDestroyed()) this.highlight.hide(); }, HIGHLIGHT_MS);
   }
 
   /** Re-applies "stay on top" if the setting is on but the window lost it. */

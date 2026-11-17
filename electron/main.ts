@@ -119,6 +119,7 @@ if (!app.requestSingleInstanceLock()) {
         if (!ep.model) throw new Error('还没有配置视觉模型（设置 → 智能体 → 视觉模型）。普通文本模型看不懂图片。');
         return describeImage(ep, fs.readFileSync(png), question, signal);
       },
+      pointAt: (target) => windows.pointAt(target),
       secrets: () => [config.getApiKey(), config.getVisionKey()],
       browser: () => ({ profileDir: path.join(agentDir, 'browser-profile'), headless: false, channels: ['msedge', 'chrome'] }),
       approvals: { get: () => config.getPluginApprovals(), set: (n, h) => config.setPluginApproval(n, h) },
@@ -155,6 +156,11 @@ if (!app.requestSingleInstanceLock()) {
     // Closing a panel must not end the app; only "退出程序" does.
     app.on('window-all-closed', () => { if (quitting) app.quit(); });
 
+    // Development only: PET_POINT_DEMO="0.5,0.3,标签" shows the pointing (ring + pet) without a screenshot or a model.
+    const demo = process.env.PET_POINT_DEMO?.split(',');
+    if (demo && demo.length >= 2) {
+      setTimeout(() => windows.pointAt({ nx: Number(demo[0]), ny: Number(demo[1]), label: demo[2] ?? '这里', note: demo[3] ?? '' }), 5000);
+    }
     // Development only: `npm run smoke` drives the real app through a scripted scenario.
     if (process.env.PET_FRAMES_DIR) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports

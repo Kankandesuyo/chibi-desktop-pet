@@ -111,7 +111,12 @@ export interface AgentServices {
   processes: import('./tools/devTools').ProcessManager;
   browser: import('./tools/browserTools').BrowserSession;
   vision: (pngPath: string, question: string, signal: AbortSignal) => Promise<string>;
+  /** Shows the user a spot on the primary screen (highlight ring + the pet walks over). Absent in tests / headless. */
+  pointAt?: (target: ScreenTarget) => void;
 }
+
+/** A spot on the primary display, as fractions of its width and height (0–1), with a short name. */
+export interface ScreenTarget { nx: number; ny: number; label: string; note?: string }
 
 export interface ToolDefinition<A = Record<string, unknown>> {
   name: string;

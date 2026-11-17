@@ -232,6 +232,11 @@ export class AnimationController {
         t.sx = 1 - up * 0.04 + squash;
         break;
       }
+      case 'pointing':
+        // Lean towards what she is showing, with a small eager bounce.
+        t.rot = dir * 3 * DEG;
+        t.dy = -Math.abs(Math.sin(i.time * 5)) * 4 * s;
+        break;
       case 'happy':
         t.dy = -Math.abs(Math.sin(i.time * 7)) * 8 * s;
         t.rot = Math.sin(i.time * 7) * 2.5 * DEG;

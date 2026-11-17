@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import type { AgentEvent, AgentPetSignal, AgentSettings, ConfirmDecision, ConfirmRequest, McpServerConfig } from '../../shared/agentTypes';
 import { TOOL_GROUPS } from '../../shared/agentTypes';
 import type { ChatMessage, PetStats } from '../../shared/types';
-import { createAgentRuntime, type AgentRuntime } from '../../electron/agent';
+import { createAgentRuntime, type AgentRuntime, type AgentRuntimeOptions } from '../../electron/agent';
 import type { LlmClient, LlmMessage, LlmRequest, LlmTurn } from '../../electron/agent/llm';
 import type { DesktopPlatform, InstalledApp, KnownFolders, RunningApp } from '../../electron/agent/types';
 
@@ -149,7 +149,7 @@ export interface Harness {
 
 export interface RunResult { events: AgentEvent[]; pet: AgentPetSignal[]; confirms: ConfirmRequest[]; done?: Extract<AgentEvent, { type: 'done' }>; error?: string }
 
-export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platform?: FakePlatform; settings?: Partial<AgentSettings>; secrets?: string[]; persona?: () => string } = {}): Harness {
+export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platform?: FakePlatform; settings?: Partial<AgentSettings>; secrets?: string[]; persona?: () => string; vision?: (question: string) => Promise<string>; pointAt?: AgentRuntimeOptions['pointAt'] } = {}): Harness {
   const platform = opts.platform ?? new FakePlatform();
   const baseDir = opts.baseDir ?? path.join(platform.root, 'agent-data');
   const llm = new ScriptedLlm(steps);
@@ -158,7 +158,8 @@ export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platfo
   const mcp: McpServerConfig[] = [];
   const rt = createAgentRuntime({
     baseDir, platform, llm, settings: () => settings,
-    vision: async () => '屏幕上是一个记事本窗口',
+    vision: async (_png, question) => (opts.vision ? opts.vision(question) : '屏幕上是一个记事本窗口'),
+    ...(opts.pointAt ? { pointAt: opts.pointAt } : {}),
     secrets: () => opts.secrets ?? [],
     browser: () => ({ profileDir: path.join(baseDir, 'browser'), headless: true, executablePath: '/usr/bin/google-chrome', channels: [] }),
     approvals: { get: () => approvals, set: (n, h) => { if (h) approvals[n] = h; else delete approvals[n]; } },

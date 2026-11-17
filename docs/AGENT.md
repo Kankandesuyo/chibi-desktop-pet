@@ -53,7 +53,7 @@
 | 软件 | list_running_apps, find_installed_app, launch_application, focus_application, close_application, open_path, open_url |
 | 系统 | get_known_folders, get_system_info |
 | 记忆 | remember, forget, list_memories |
-| 界面自动化 | get_active_window, list_windows, inspect_ui_elements, click_element, type_text, press_hotkey, scroll, wait_for_window, capture_screenshot, analyze_screenshot |
+| 界面自动化 | get_active_window, list_windows, inspect_ui_elements, click_element, type_text, press_hotkey, scroll, wait_for_window, capture_screenshot, analyze_screenshot, point_on_screen |
 | 浏览器 | browser_open, browser_search, browser_click, browser_fill, browser_extract, browser_tabs, browser_download, browser_close |
 | 开发者 | project_tree, git_status, run_command, start_dev_server, stop_dev_server, list_dev_servers, read_process_output |
 | 系统管理 | run_admin_command, winget_search, list_installed_software, install_software, uninstall_software, upgrade_software, manage_service, registry_read, registry_write, registry_delete |
@@ -99,6 +99,7 @@
 - **结构化文本协议**：模型不支持工具时，要求它只输出一个 `<tool_call>{"name":…,"arguments":{…}}</tool_call>`。
   格式不对、多个调用、多余字段，都会作为错误退回给模型，不会执行。“自动”模式下接口拒绝 `tools` 参数时自动切换。
 - **视觉**：普通文本模型看不懂图片。`analyze_screenshot` 需要在设置里配置一个支持图片的模型，没配置时会明确报错。
+- **指点**：`point_on_screen` 截屏后让视觉模型返回目标的位置（按整张图 0~1000 计），在主屏幕上画一个不挡鼠标、不抢焦点的高亮圈（约 10 秒），桌宠沿地面走到旁边挥手指示。每次都要确认（截图会离开电脑）；只指不点。开发时可用 `PET_POINT_DEMO="0.5,0.3,标签"` 不截图、不调模型地预览效果。
 
 ## 扩展：不改 Agent 代码增加能力
 

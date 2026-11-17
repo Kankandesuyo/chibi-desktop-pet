@@ -1,7 +1,7 @@
 import 'pixi.js/unsafe-eval';   // lets PixiJS run under a strict CSP (no eval / new Function)
 import { Application } from 'pixi.js';
 import { FOOT_MARGIN } from '../../shared/constants';
-import type { Emotion, InitialData, PetAction, PetAPI, PetNotice, PetState, Settings } from '../../shared/types';
+import type { Emotion, InitialData, PetAction, PetAPI, PetNotice, PetState, PointRequest, Settings } from '../../shared/types';
 import { LINES, TUNING, pick } from '../config/petConfig';
 import { AnimationController, type IdleVariant } from './AnimationController';
 import { BehaviorScheduler } from './BehaviorScheduler';
@@ -42,6 +42,8 @@ export class PetEngine implements InteractionHost {
   private scheduler = new BehaviorScheduler();
   /** Scenes (states with their own drawn sequence) this character can play at random; set once the art is loaded. */
   private scenes: PetState[] = [];
+  /** Walking over to show the user something on screen: where to stop, and what to say once there. */
+  private pointing: { target: PointRequest; standX: number } | null = null;
   private drag = new DragController({ struggleAfter: TUNING.struggleAfter });
   private holdSayAt = 0;
   /** Idle mouth: she rests with it closed or open, and it flaps while she talks. */
@@ -103,6 +105,7 @@ export class PetEngine implements InteractionHost {
       this.api.onMenuCommand((c) => { if (c.type === 'action') this.perform(c.action, true); else this.api.openChat(); }),
       this.api.onPetNotify((m) => this.onChatEvent(m)),
       this.api.onVisibility((v) => this.setVisible(v)),
+      this.api.onPetPoint((p) => this.pointAt(p)),
     );
     const onVisibility = (): void => this.setVisible(document.visibilityState === 'visible');
     document.addEventListener('visibilitychange', onVisibility);
@@ -152,6 +155,7 @@ export class PetEngine implements InteractionHost {
     if (move.landedWith !== null) this.onLanded(move.landedWith);
     // Standing in mid-air (resolution changed, pet resized, taskbar moved…) -> fall to the floor.
     if (!m.isDragging() && m.state !== 'falling' && this.movement.isAirborne()) { this.movement.startFall(); m.force('falling'); }
+    this.updatePointing();
     this.sendPosition();
 
     // Timed effects.
@@ -319,6 +323,57 @@ export class PetEngine implements InteractionHost {
   private spawn(kind: EffectKind, dx: number, dy: number): void {
     const top = this.anim.headTop();
     this.effects.spawn(kind, top.x + dx * this.settings.size, top.y + dy * this.settings.size, 0.55 + 0.6 * this.settings.size);
+  }
+
+  /**
+   * The agent found something on screen for the user: walk to just beside it (along her floor, so she does not
+   * cover it) and point. A ring is drawn there by main at the same time, so this is only the friendly part.
+   */
+  pointAt(target: PointRequest): void {
+    const m = this.machine;
+    if (m.isDragging() || m.state === 'falling') return;
+    if (m.state === 'sleeping') m.force('waking');
+    const mv = this.movement;
+    const wa = mv.workArea;
+    const onHerScreen = target.point.x >= wa.x && target.point.x <= wa.x + wa.width;
+    // Stand on the side she is coming from, a body-width away, so the highlighted thing stays visible.
+    const side = target.point.x < mv.pos.x ? 1 : -1;
+    // (Kept a little inside the screen edges, where walking would otherwise turn her around before she arrives.)
+    const standX = onHerScreen ? Math.min(mv.maxX - 4, Math.max(mv.minX + 4, target.point.x + side * 150 * this.settings.size)) : mv.pos.x;
+    this.pointing = { target, standX };
+    const distance = Math.abs(standX - mv.pos.x);
+    if (distance < 24) { this.startPointing(); return; }
+    m.force(standX < mv.pos.x ? 'walkLeft' : 'walkRight');
+    const speed = mv.speedOf(m.state, this.settings.speed);
+    // Long enough to arrive (timer runs on speed-scaled time), plus a margin.
+    if (speed > 0) m.setDuration((distance / speed) * this.settings.speed + 3);
+    this.hooks.say('我来指给你看～', 2000);
+  }
+
+  private updatePointing(): void {
+    const p = this.pointing;
+    if (!p) return;
+    const m = this.machine;
+    if (m.state !== 'walkLeft' && m.state !== 'walkRight') {
+      if (m.state !== 'pointing') this.pointing = null;          // picked up, timed out… the ring still shows the spot
+      return;
+    }
+    const x = this.movement.pos.x;
+    if ((m.state === 'walkLeft' && x <= p.standX) || (m.state === 'walkRight' && x >= p.standX)) {
+      this.movement.pos.x = p.standX;
+      this.startPointing();
+    }
+  }
+
+  private startPointing(): void {
+    const p = this.pointing;
+    if (!p) return;
+    this.movement.facing = p.target.point.x < this.movement.pos.x ? 'left' : 'right';
+    this.machine.force('pointing');
+    const what = p.target.label ? `「${p.target.label}」在这里！` : '在这里！';
+    const note = p.target.note.length > 40 ? `${p.target.note.slice(0, 39)}…` : p.target.note;
+    this.hooks.say(`${what}${note}`, 5000);
+    this.pointing = null;
   }
 
   /** Menu / AI actions. `fromUser` lets a menu click override a sulk; the AI cannot. */

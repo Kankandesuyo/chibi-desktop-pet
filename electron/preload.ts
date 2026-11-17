@@ -11,7 +11,7 @@ const C = {
   updateAiConfig: 'settings:update-ai', saveChatHistory: 'chat:save-history', aiChat: 'ai:chat',
   aiAbort: 'ai:abort', notifyPet: 'pet:notify', placement: 'evt:placement', dragUpdate: 'evt:drag-update',
   settings: 'evt:settings', menuCommand: 'evt:menu-command', aiStream: 'evt:ai-stream',
-  petNotify: 'evt:pet-notify', visibility: 'evt:visibility',
+  petNotify: 'evt:pet-notify', visibility: 'evt:visibility', petPoint: 'evt:pet-point', highlight: 'evt:highlight',
   agentRun: 'agent:run', agentAbort: 'agent:abort', agentConfirm: 'agent:confirm', agentInfo: 'agent:info',
   agentUpdateSettings: 'agent:update-settings', agentMemory: 'agent:memory', agentPickFolder: 'agent:pick-folder',
   agentPlugins: 'agent:plugins', agentOpenFolder: 'agent:open-folder', agentEvent: 'evt:agent',
@@ -69,6 +69,8 @@ const api: PetAPI = {
   onAiStream: listen(C.aiStream),
   onPetNotify: listen(C.petNotify),
   onVisibility: listen(C.visibility),
+  onPetPoint: listen(C.petPoint),
+  onHighlight: listen(C.highlight),
 };
 
 contextBridge.exposeInMainWorld('petAPI', api);

@@ -9,6 +9,8 @@ export const PET_STATES = [
   'sleeping', 'waking', 'talking',
   /** A little scene of her own (e.g. eating), only for characters whose art has a sequence for it. */
   'eating',
+  /** Showing the user a spot on screen (after walking over to it). */
+  'pointing',
 ] as const;
 export type PetState = (typeof PET_STATES)[number];
 
@@ -73,6 +75,9 @@ export interface Point { x: number; y: number }
 export interface PetPlacement { feet: Point; workArea: Rect }
 
 export interface DragUpdate { feet: Point; vx: number; vy: number }
+
+export interface PointRequest { point: Point; label: string; note: string }
+export interface HighlightRequest { x: number; y: number; label: string; id: number }
 
 export interface ChatMessage { role: 'user' | 'assistant'; content: string }
 
@@ -157,6 +162,10 @@ export interface PetAPI {
   onAiStream(cb: (e: AiStreamEvent) => void): () => void;
   onPetNotify(cb: (meta: PetNotice) => void): () => void;
   onVisibility(cb: (visible: boolean) => void): () => void;
+  /** The agent wants her to show the user a spot on screen (screen DIP). */
+  onPetPoint(cb: (p: PointRequest) => void): () => void;
+  /** Highlight overlay only: where to draw the ring (window-relative DIP). */
+  onHighlight(cb: (h: HighlightRequest) => void): () => void;
   // Shared conversation (desktop chat + remote web page). Only present when the remote-chat add-on
   // (remote-chat/server.cjs, wired in by remote-chat/install.py) is installed; otherwise chat is local.
   sharedState?(): Promise<SharedChatSnapshot>;
