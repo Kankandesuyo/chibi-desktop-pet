@@ -98,11 +98,11 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
   if (chat) {
     windows.composeInChat({ paths: [path.join(app.getPath('desktop'), '某个文件.txt'), path.join(app.getPath('desktop'), '另一个.png')], hint: '想让她对这些文件做什么？' });
     await sleep(600);
-    chipText = (await chat.webContents.executeJavaScript('document.querySelector(".chat-attach span")?.textContent ?? ""')) as string;
-    const placeholder = (await chat.webContents.executeJavaScript('document.querySelector(".chat-form input")?.placeholder ?? ""')) as string;
+    chipText = (await chat.webContents.executeJavaScript('document.querySelector(".hx-attach span")?.textContent ?? ""')) as string;
+    const placeholder = (await chat.webContents.executeJavaScript('document.querySelector(".hx-composer input")?.placeholder ?? ""')) as string;
     fs.writeFileSync(path.join(dir, '9c_chat_attach.png'), (await chat.webContents.capturePage()).toPNG());
     log.push({ step: '9c_chat_attach', chipText, placeholder });
-    await chat.webContents.executeJavaScript('document.querySelector(".chat-attach button")?.click(); "ok"');
+    await chat.webContents.executeJavaScript('document.querySelector(".hx-attach button")?.click(); "ok"');
   }
   log.push({ step: '9b_file_drop', acceptedOff, bubbleOff, acceptedOn, bubbleOn });
 
@@ -145,31 +145,83 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
     // Type into the real chat box and submit, like a user would.
     await chat.webContents.executeJavaScript(`
       (async () => {
-        for (let i = 0; i < 20 && !document.querySelector('.chat-form input'); i++) await new Promise((r) => setTimeout(r, 100));
-        const input = document.querySelector('.chat-form input');
+        for (let i = 0; i < 20 && !document.querySelector('.hx-composer input'); i++) await new Promise((r) => setTimeout(r, 100));
+        const input = document.querySelector('.hx-composer input');
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
         setter.call(input, '帮我在桌面建一个叫 智能体冒烟测试 的文件夹');
         input.dispatchEvent(new Event('input', { bubbles: true }));
         await new Promise((r) => setTimeout(r, 300));
-        document.querySelector('.chat-form button[type=submit]').click();
+        document.querySelector('.hx-composer button[type=submit]').click();
         return 'sent';
       })()`);
     let confirmSeen = false;
-    for (let i = 0; i < 60 && !confirmSeen; i++) { await sleep(200); confirmSeen = (await chat.webContents.executeJavaScript('Boolean(document.querySelector(".confirm"))')) as boolean; }
+    for (let i = 0; i < 60 && !confirmSeen; i++) { await sleep(200); confirmSeen = (await chat.webContents.executeJavaScript('Boolean(document.querySelector(".hx-perm"))')) as boolean; }
     const existedBeforeApproval = fs.existsSync(target);
     fs.writeFileSync(path.join(dir, '11_agent_confirm.png'), (await chat.webContents.capturePage()).toPNG());
-    await chat.webContents.executeJavaScript('document.querySelector(".confirm .ok")?.click(); "clicked"');
+    await chat.webContents.executeJavaScript('document.querySelector(".hx-perm .ok")?.click(); "clicked"');
     let done = false;
-    for (let i = 0; i < 60 && !done; i++) { await sleep(200); done = (await chat.webContents.executeJavaScript('window.__agent.events.includes("done") || window.__agent.events.includes("error")')) as boolean; }
+    for (let i = 0; i < 60 && !done; i++) { await sleep(200); done = (await chat.webContents.executeJavaScript('!document.querySelector(".hx-assistant.live") && document.querySelectorAll(".hx-assistant").length > 0')) as boolean; }
     await sleep(600);
     fs.writeFileSync(path.join(dir, '12_agent_done.png'), (await chat.webContents.capturePage()).toPNG());
-    await chat.webContents.executeJavaScript('document.querySelector(".agent-done-steps")?.setAttribute("open", ""); "ok"');
+    await chat.webContents.executeJavaScript('document.querySelector(".hx-assistant:not(.live) .hx-tool-head")?.click(); "ok"');
     await sleep(200);
     fs.writeFileSync(path.join(dir, '13_agent_steps.png'), (await chat.webContents.capturePage()).toPNG());
     const events = (await chat.webContents.executeJavaScript('window.__agent.events')) as string[];
     const petState = (await wc.executeJavaScript('document.body.dataset.petState')) as string;
     log.push({ step: '11_agent', confirmSeen, existedBeforeApproval, folderCreated: fs.existsSync(target), events, modelRequests: requests, petStateAfter: petState });
     fs.rmSync(target, { recursive: true, force: true });
+
+    // Harness: the turn above is in the session log, and a slash command answers without a model call.
+    const sessionDir = path.join(app.getPath('userData'), 'agent', 'sessions');
+    const sessionTypes = fs.existsSync(sessionDir)
+      ? fs.readdirSync(sessionDir).filter((f) => f.endsWith('.jsonl')).flatMap((f) => fs.readFileSync(path.join(sessionDir, f), 'utf8').split('\n').filter(Boolean).map((l) => (JSON.parse(l) as { type: string }).type))
+      : [];
+    const requestsBefore = requests.length;
+    await chat.webContents.executeJavaScript(`
+      (async () => {
+        const input = document.querySelector('.hx-composer input');
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(input, '/status');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 200));
+        document.querySelector('.hx-composer button[type=submit]').click();
+        return 'sent';
+      })()`);
+    await sleep(500);
+    const commandReply = (await chat.webContents.executeJavaScript('document.querySelector(".hx-command")?.textContent ?? ""')) as string;
+    fs.writeFileSync(path.join(dir, '13b_slash_status.png'), (await chat.webContents.capturePage()).toPNG());
+    log.push({ step: '13b_harness', sessionTypes, commandReply, modelCalledForCommand: requests.length !== requestsBefore });
+
+    // Harness UI: the session column lists this session, the trajectory tab shows the turn, the stats bar counts it.
+    const ui = (await chat.webContents.executeJavaScript(`(() => ({
+      sessions: [...document.querySelectorAll('.hx-session')].map((b) => ({ title: b.querySelector('.hx-session-title')?.textContent, current: b.classList.contains('current') })),
+      toolRows: document.querySelectorAll('.hx-assistant:not(.live) .hx-tool').length,
+      stats: document.querySelector('.hx-stats')?.textContent ?? '',
+      permission: document.querySelector('.hx-mode select')?.value ?? null,
+      avatar: !!document.querySelector('.hx-head img.hx-avatar'),
+    }))()`)) as Record<string, unknown>;
+    await chat.webContents.executeJavaScript(`[...document.querySelectorAll('.hx-tabs button')].find((b) => b.textContent === '轨迹')?.click(); 'ok'`);
+    await sleep(600);
+    const trajectory = (await chat.webContents.executeJavaScript(`(() => ({
+      turns: document.querySelectorAll('.hx-traj-turn').length,
+      lanes: [...document.querySelectorAll('.hx-traj-lane')].map((x) => x.textContent),
+      end: document.querySelector('.hx-traj-end')?.textContent ?? '',
+    }))()`)) as Record<string, unknown>;
+    fs.writeFileSync(path.join(dir, '13c_trajectory.png'), (await chat.webContents.capturePage()).toPNG());
+    await chat.webContents.executeJavaScript(`[...document.querySelectorAll('.hx-tabs button')].find((b) => b.textContent === '对话')?.click(); 'ok'`);
+    // Slash completion pops up while typing "/re".
+    await chat.webContents.executeJavaScript(`
+      (async () => {
+        const input = document.querySelector('.hx-composer input');
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(input, '/re'); input.dispatchEvent(new Event('input', { bubbles: true }));
+        return 'typed';
+      })()`);
+    await sleep(250);
+    const slashMenu = (await chat.webContents.executeJavaScript(`[...document.querySelectorAll('.hx-slash li code')].map((c) => c.textContent)`)) as string[];
+    fs.writeFileSync(path.join(dir, '13d_slash_menu.png'), (await chat.webContents.capturePage()).toPNG());
+    await chat.webContents.executeJavaScript(`(() => { const input = document.querySelector('.hx-composer input'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, ''); input.dispatchEvent(new Event('input', { bubbles: true })); return 'cleared'; })()`);
+    log.push({ step: '13c_harness_ui', ui, trajectory, slashMenu });
     server.close();
     // chat window controls
     const b0 = chat.getBounds();
@@ -185,7 +237,7 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
     const pinnedBefore = chat.isAlwaysOnTop();
     await chat.webContents.executeJavaScript('window.petAPI.panelControl("toggle-pin")');
     const pinnedAfter = chat.isAlwaysOnTop();
-    await chat.webContents.executeJavaScript('document.querySelector(".chat-head-actions button:last-child").click()');
+    await chat.webContents.executeJavaScript('document.querySelector(".hx-head-actions button:last-child").click()');
     await sleep(300);
     chat.webContents.send('noop');
     const g = (await chat.webContents.executeJavaScript('(() => { const r = document.querySelector(".resize-grip").getBoundingClientRect(); return [r.x + 8, r.y + 8]; })()')) as [number, number];
@@ -202,7 +254,7 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
     windows.revealChat();
     await sleep(300);
     log.push({ step: '15_chat_controls', sizes: [b0.width, b1.width, b2.width], pinnedBefore, pinnedAfter, hiddenKeepsWindow: hidden, revealed: chat.isVisible(),
-      historyKept: (await chat.webContents.executeJavaScript('document.querySelectorAll(".chat-msg").length')) as number });
+      historyKept: (await chat.webContents.executeJavaScript('document.querySelectorAll(".hx-msg").length')) as number });
     windows.openPanel('settings');
     await sleep(2500);
     const settingsWin = BrowserWindow.getAllWindows().find((w) => w !== pet && w !== chat);

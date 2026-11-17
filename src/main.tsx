@@ -7,13 +7,11 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { resolveTheme, type CustomCharacterInfo } from '../shared/characters';
 import { useSettingsStore } from './store/settingsStore';
 import './styles/app.css';
+import './styles/harness.css';
 
 /** One bundle, three windows — the main process picks the view through the URL hash. */
 const view = window.location.hash.replace('#', '') || 'pet';
 document.body.dataset.view = view;
-// remote-chat/desktop_patch.py patches older renderers by regex. These marker strings tell it this build
-// already has the shared conversation and the settings that follow saved values, so it leaves it alone.
-document.documentElement.dataset.remoteChatReady = '__sharedChatV2 __visionSettingsSync';
 
 // Window colours follow the chosen theme (or the character) in all three windows, live.
 // User-made characters carry their own theme; the list is re-read when the character changes.

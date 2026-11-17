@@ -25,6 +25,8 @@ interface ChatState {
   __sharedChatV2: true;
   /** Version of the last shared snapshot applied; older snapshots are ignored. */
   sharedVersion: number;
+  /** The current session and its run stats (from the shared snapshot). */
+  session: NonNullable<SharedChatSnapshot['session']> | null;
   load(history: ChatMessage[]): void;
   /** Replace the view with the shared conversation (remote-chat add-on only). */
   sync(snapshot: SharedChatSnapshot): void;
@@ -59,6 +61,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     confirms: [],
     __sharedChatV2: true,
     sharedVersion: -1,
+    session: null,
     load: (history) => set({ messages: history }),
 
     sync: (s) => {
@@ -67,6 +70,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       rawBuffer = a?.text ?? '';
       set({
         sharedVersion: s.version,
+        session: s.session ?? null,
         messages: s.messages,
         streaming: a ? stripPartialTag(rawBuffer) : null,
         requestId: a?.id ?? null,

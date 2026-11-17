@@ -46,7 +46,8 @@ export class WindowManager {
   /** Chat window: stays on top unless unpinned; four sizes. */
   private chatPinned = false;
   private chatSize = 1;
-  static readonly CHAT_SIZES = [{ width: 340, height: 460 }, { width: 400, height: 580 }, { width: 520, height: 720 }, { width: 660, height: 880 }];
+  /** Narrow (no session column) → harness layout with the session column → bigger. */
+  static readonly CHAT_SIZES = [{ width: 420, height: 560 }, { width: 860, height: 620 }, { width: 1000, height: 700 }, { width: 1180, height: 800 }];
   private feet: Point = { x: 0, y: 0 };
   private dragTimer: NodeJS.Timeout | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -314,7 +315,7 @@ export class WindowManager {
   openPanel(view: PanelView): void {
     const existing = this.panels.get(view);
     if (existing && !existing.isDestroyed()) { existing.show(); existing.focus(); return; }
-    const size = view === 'chat' ? this.fitToScreen(WindowManager.CHAT_SIZES[this.chatSize] ?? { width: 400, height: 580 }) : { width: 460, height: 720 };
+    const size = view === 'chat' ? this.fitToScreen(WindowManager.CHAT_SIZES[this.chatSize] ?? { width: 860, height: 620 }) : { width: 460, height: 720 };
     const wa = this.displayFor(this.feet).workArea;
     const petTop = this.feet.y - CHARACTER_HEIGHT * this.size;
     let x = this.feet.x - CHARACTER_HALF_WIDTH * this.size - size.width - 8;

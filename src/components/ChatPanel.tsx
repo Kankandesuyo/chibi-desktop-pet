@@ -1,57 +1,33 @@
-import { useEffect, useRef, useState, type FormEvent, type JSX } from 'react';
-import type { AgentStepView, ConfirmRequest, PlanStepView } from '../../shared/agentTypes';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import type { SessionSummary } from '../../shared/harness';
 import { withAttachments, type ChatCompose } from '../../shared/fileDrop';
 import type { PanelAction, PanelState, Settings } from '../../shared/types';
 import { useChatStore, type ChatMode } from '../store/chatStore';
 import { usePetStore } from '../store/petStore';
 import { useSettingsStore } from '../store/settingsStore';
-
-const STEP_ICON: Record<AgentStepView['status'], string> = { running: '⏳', waiting: '⏸', ok: '✅', failed: '❌', denied: '🚫' };
-const PLAN_ICON: Record<PlanStepView['status'], string> = { pending: '○', in_progress: '▶', done: '✔', failed: '✘', skipped: '–' };
-const RISK_LABEL = { low: '低风险', medium: '中风险', high: '高风险' } as const;
-
-function Steps({ steps }: { steps: AgentStepView[] }): JSX.Element {
-  return (
-    <ul className="agent-steps">
-      {steps.map((s) => (
-        <li key={s.stepId} className={`step-${s.status}`}>
-          <span className="step-icon">{STEP_ICON[s.status]}</span>
-          <span className="step-text">{s.title}{s.summary && s.status !== 'running' ? <small>{s.summary}</small> : null}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ConfirmCard({ req, onEdit }: { req: ConfirmRequest; onEdit: (prefix: string) => void }): JSX.Element {
-  const answer = useChatStore((s) => s.answer);
-  /** Something about to be posted under the user's account: offer "改一下" next to 发 / 不发. */
-  const publish = req.tool === 'browser_click' && req.risk === 'high';
-  return (
-    <div className={`confirm confirm-${req.risk}`}>
-      <div className="confirm-head"><b>{req.title}</b><span className="badge">{RISK_LABEL[req.risk]}</span></div>
-      <p className="confirm-reason">{req.reason}</p>
-      {req.afterExternalContent && <p className="confirm-warn">⚠ 这一步是在读取了文件/网页等外部内容之后提出的，请确认这确实是你想要的。</p>}
-      {req.preview.length > 0 && <pre className="confirm-preview">{req.preview.join('\n')}</pre>}
-      <div className="confirm-actions">
-        <button type="button" className="ok" onClick={() => answer(req.confirmId, 'allow')}>{publish ? '发' : '允许'}</button>
-        {publish && <button type="button" onClick={() => { answer(req.confirmId, 'deny'); onEdit('先别发，改成：'); }}>改一下</button>}
-        {req.canAllowForTask && <button type="button" onClick={() => answer(req.confirmId, 'allow_task')}>本次任务都允许</button>}
-        <button type="button" className="no" onClick={() => answer(req.confirmId, 'deny')}>{publish ? '不发' : '拒绝'}</button>
-      </div>
-    </div>
-  );
-}
+import { Composer, type PermissionMode } from './chat/Composer';
+import { Sidebar } from './chat/Sidebar';
+import { StatsBar } from './chat/StatsBar';
+import { PermissionCard, PlanBox, ToolRows } from './chat/ToolRows';
+import { Trajectory } from './chat/Trajectory';
 
 function modeOf(s: Settings): ChatMode {
   return !(s.aiEnabled && s.ai.hasApiKey) ? 'offline' : s.agent.enabled ? 'agent' : 'chat';
 }
 
-const baseName = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+const permissionOf = (s: Settings): PermissionMode => (s.agent.readOnly ? 'readonly' : s.agent.autoApproveMedium ? 'auto' : 'ask');
 
-/** Chat window. In agent mode it also shows the plan, each tool step and confirmation cards. */
+/** Below this width the session column folds away (the smallest window size). */
+const SIDEBAR_MIN_WIDTH = 640;
+
+/**
+ * The chat window, laid out like an agent harness: sessions on the left; the conversation with each tool
+ * call as an expandable row, inline permission prompts and the plan; a trajectory tab with the raw event
+ * log; a composer with slash commands and the permission mode; run stats at the bottom. She is still she:
+ * her name, face, colours and voice.
+ */
 export function ChatPanel(): JSX.Element {
-  const { messages, streaming, requestId, notice, steps, plan, interim, confirms, send, stop, clear } = useChatStore();
+  const { messages, streaming, requestId, notice, steps, plan, interim, confirms, send, stop, clear, answer, session } = useChatStore();
   const settings = useSettingsStore((s) => s.settings);
   const [text, setText] = useState('');
   const [panel, setPanel] = useState<PanelState>({ pinned: false, sizeIndex: 1, sizeCount: 4 });
@@ -61,7 +37,20 @@ export function ChatPanel(): JSX.Element {
   /** Files dropped on her that the next message is about (shown as a chip, appended on send). */
   const [attached, setAttached] = useState<string[]>([]);
   const [hint, setHint] = useState<string | null>(null);
+  /** Answer to the last slash command (shown in the list, never sent to the model). */
+  const [commandReply, setCommandReply] = useState<string | null>(null);
+  const [tab, setTab] = useState<'chat' | 'trajectory'>('chat');
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [avatar, setAvatar] = useState('');
+  const [wide, setWide] = useState(() => window.innerWidth >= SIDEBAR_MIN_WIDTH);
+  const [sideOpen, setSideOpen] = useState(true);
   const mode: ChatMode = modeOf(settings);
+  const working = requestId !== null;
+  const name = settings.petName || '她';
+
+  const refreshSessions = useCallback((): void => {
+    void window.petAPI.sessionsList().then((r) => { if (!('error' in r)) setSessions(r.sessions); });
+  }, []);
 
   useEffect(() => {
     const applyCompose = (c: ChatCompose | null): void => {
@@ -88,76 +77,152 @@ export function ChatPanel(): JSX.Element {
     const offShared = window.petAPI.onSharedChat?.((s) => useChatStore.getState().sync(s));
     const offStream = window.petAPI.onAiStream((e) => useChatStore.getState().handleStream(e));
     const offAgent = window.petAPI.onAgentEvent((e) => useChatStore.getState().handleAgent(e));
-    const offSettings = window.petAPI.onSettings((s) => useSettingsStore.getState().apply(s));
+    const offSettings = window.petAPI.onSettings((s) => {
+      const characterChanged = s.character !== useSettingsStore.getState().settings.character;
+      useSettingsStore.getState().apply(s);
+      if (characterChanged) void window.petAPI.petAvatar().then(setAvatar);
+    });
     void window.petAPI.panelControl('state').then((s) => { if (s) setPanel(s); });
-    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') window.petAPI.closePanel(); };
+    void window.petAPI.petAvatar().then(setAvatar);
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape' && !(e.target instanceof HTMLInputElement && e.target.value.startsWith('/'))) window.petAPI.closePanel(); };
+    const onResize = (): void => setWide(window.innerWidth >= SIDEBAR_MIN_WIDTH);
     window.addEventListener('keydown', onKey);
-    return () => { offCompose(); offShared?.(); offStream(); offAgent(); offSettings(); window.removeEventListener('keydown', onKey); };
+    window.addEventListener('resize', onResize);
+    return () => { offCompose(); offShared?.(); offStream(); offAgent(); offSettings(); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
   }, []);
 
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages, streaming, steps, confirms, plan]);
+  // The list changes when the session changes, and a new session gets its title from its first message.
+  const firstUser = messages.find((m) => m.role === 'user')?.content ?? '';
+  useEffect(() => { refreshSessions(); }, [session?.id, firstUser, refreshSessions]);
 
-  const submit = (e: FormEvent): void => {
-    e.preventDefault();
-    if (!text.trim() || requestId) return;
-    send(withAttachments(text, attached), mode, usePetStore.getState().stats);
+  useEffect(() => {
+    if (tab === 'chat') listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+  }, [messages, streaming, steps, confirms, plan, commandReply, tab]);
+
+  const sendNow = (t: string): void => send(t, mode, usePetStore.getState().stats);
+
+  const submit = (): void => {
+    if (!text.trim()) return;
+    if (/^\/\S/.test(text.trim()) && attached.length === 0) {
+      // Slash command: answered by the main process, no model turn. Unknown "/…" text falls through as a message.
+      const typed = text;
+      setText('');
+      void window.petAPI.agentCommand(typed).then((r) => {
+        if (!r) { if (!useChatStore.getState().requestId) sendNow(typed); return; }
+        // In the shared conversation /new has already switched session in the main process.
+        if (r.action === 'clear' && !window.petAPI.sharedClear) clear();
+        setCommandReply(r.reply);
+        if (r.action === 'send' && r.prompt) sendNow(r.prompt);
+      });
+      return;
+    }
+    if (working) return;
+    setCommandReply(null);
+    sendNow(withAttachments(text, attached));
     setText('');
     setAttached([]);
     setHint(null);
   };
 
-  const title = mode === 'offline' ? '和她聊天（离线模式）' : mode === 'agent' ? '和她聊天 · 智能体模式' : '和她聊天';
-  const working = requestId !== null;
+  const openSession = (id: string): void => {
+    setCommandReply(null);
+    void window.petAPI.sessionOpen(id).then((r) => { if ('error' in r) useChatStore.setState({ notice: r.error }); refreshSessions(); });
+  };
+  const newSession = (): void => {
+    setCommandReply(null);
+    if (window.petAPI.sharedClear) void window.petAPI.sessionNew().then((r) => { if ('error' in r) useChatStore.setState({ notice: r.error }); refreshSessions(); });
+    else clear();
+  };
+  const setPermission = (m: PermissionMode): void => {
+    void window.petAPI.agentUpdateSettings({ readOnly: m === 'readonly', autoApproveMedium: m === 'auto' }).then((s) => useSettingsStore.getState().apply(s));
+  };
+
+  const badge = mode === 'offline' ? '离线' : mode === 'agent' ? '智能体' : '聊天';
+  const showSide = wide && sideOpen;
+  const liveSteps = steps.filter((s) => s.tool !== 'update_plan');
+  const placeholder = hint ?? (mode === 'agent' ? `和${name}说点什么，或让她帮你做事…` : mode === 'chat' ? `和${name}说点什么…` : '输入消息，回车发送');
 
   return (
-    <div className="chat">
-      <header className="chat-head">
-        <span>{title}</span>
-        <span className="chat-head-actions">
-          <button type="button" className={panel.pinned ? 'on' : ''} onClick={() => control('toggle-pin')} title={panel.pinned ? '已置顶：点一下取消置顶' : '点一下让窗口始终在最前面'}>📌</button>
-          <button type="button" onClick={() => control('smaller')} disabled={panel.sizeIndex <= 0} title="缩小窗口">－</button>
-          <button type="button" onClick={() => control('bigger')} disabled={panel.sizeIndex >= panel.sizeCount - 1} title="放大窗口">＋</button>
-          <button type="button" onClick={clear} title="清除聊天记录">清空</button>
-          <button type="button" onClick={() => window.petAPI.openSettings()} title="设置">设置</button>
-          <button type="button" onClick={() => control('hide')} title="暂时关闭（聊天记录和正在进行的任务都会保留；双击桌宠重新打开，需要确认时会自动弹出）">✕</button>
-        </span>
-      </header>
-      <div className="chat-list" ref={listRef}>
-        {messages.length === 0 && !working && (
-          <p className="chat-empty">
-            {mode === 'offline' && '还没有配置 AI：现在是离线模式，她只会说几句简单的话。在“设置”里填好 API 就能真正聊天。'}
-            {mode === 'chat' && '说点什么吧～'}
-            {mode === 'agent' && '说点什么，或者让她帮你做事：\n“在桌面建一个叫 AI项目 的文件夹”\n“打开 VS Code”\n“帮我找昨天下载的 PDF”\n有风险的操作会先问你。'}
-          </p>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={`chat-msg chat-${m.role}${m.outcome === 'failure' ? ' chat-failed' : ''}`}>
-            {m.steps && m.steps.length > 0 && (
-              <details className="agent-done-steps">
-                <summary>{m.outcome === 'failure' ? '⚠ ' : ''}执行了 {m.steps.length} 步</summary>
-                <Steps steps={m.steps} />
-              </details>
-            )}
-            {m.content}
+    <div className={`hx${showSide ? ' with-side' : ''}`}>
+      {showSide && (
+        <Sidebar
+          sessions={sessions} current={session?.id ?? null} busy={working} name={name} avatar={avatar}
+          onOpen={openSession} onNew={newSession} onSettings={() => window.petAPI.openSettings()}
+        />
+      )}
+      <main className="hx-main">
+        <header className="hx-head">
+          {wide && <button type="button" className="hx-icon" onClick={() => setSideOpen(!sideOpen)} title={sideOpen ? '收起会话列表' : '展开会话列表'}>☰</button>}
+          {avatar && <img src={avatar} alt="" className="hx-avatar small" />}
+          <span className="hx-title">{name}</span>
+          {wide && <span className={`hx-badge b-${mode}`}>{badge}</span>}
+          <nav className="hx-tabs">
+            <button type="button" className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>对话</button>
+            <button type="button" className={tab === 'trajectory' ? 'on' : ''} onClick={() => setTab('trajectory')} title="每一次模型请求和工具调用的原始记录">轨迹</button>
+          </nav>
+          <span className="hx-head-actions">
+            {!showSide && <button type="button" className="hx-icon" onClick={newSession} disabled={working} title="新会话（/new）">✎</button>}
+            <button type="button" className={`hx-icon${panel.pinned ? ' on' : ''}`} onClick={() => control('toggle-pin')} title={panel.pinned ? '已置顶：点一下取消置顶' : '点一下让窗口始终在最前面'}>📌</button>
+            <button type="button" className="hx-icon" onClick={() => control('smaller')} disabled={panel.sizeIndex <= 0} title="缩小窗口">－</button>
+            <button type="button" className="hx-icon" onClick={() => control('bigger')} disabled={panel.sizeIndex >= panel.sizeCount - 1} title="放大窗口">＋</button>
+            {!showSide && <button type="button" className="hx-icon" onClick={() => window.petAPI.openSettings()} title="设置">⚙</button>}
+            <button type="button" className="hx-icon" onClick={() => control('hide')} title="暂时关闭（聊天记录和正在进行的任务都会保留；双击桌宠重新打开，需要确认时会自动弹出）">✕</button>
+          </span>
+        </header>
+
+        {tab === 'trajectory' ? (
+          <div className="hx-scroll"><Trajectory refreshKey={`${session?.id ?? ''}:${messages.length}:${working}`} /></div>
+        ) : (
+          <div className="hx-scroll" ref={listRef}>
+            <div className="hx-thread">
+              {messages.length === 0 && !working && (
+                <div className="hx-welcome">
+                  {avatar && <img src={avatar} alt="" />}
+                  <p>
+                    {mode === 'offline' && '还没有配置 AI：现在是离线模式，她只会说几句简单的话。在“设置”里填好 API 就能真正聊天。'}
+                    {mode === 'chat' && `和${name}说点什么吧～`}
+                    {mode === 'agent' && `说点什么，或者让${name}帮你做事：\n“在桌面建一个叫 AI项目 的文件夹”\n“打开 VS Code”\n“帮我找昨天下载的 PDF”\n有风险的操作会先问你。输入 / 可以用命令。`}
+                  </p>
+                </div>
+              )}
+              {messages.map((m, i) => (
+                m.role === 'user'
+                  ? <div key={i} className="hx-msg hx-user">{m.content}</div>
+                  : (
+                    <div key={i} className={`hx-msg hx-assistant${m.outcome === 'failure' || (m as { failed?: boolean }).failed ? ' failed' : ''}`}>
+                      {avatar ? <img src={avatar} alt="" className="hx-avatar small" /> : <span className="hx-avatar small" />}
+                      <div className="hx-assistant-body">
+                        {m.steps && m.steps.length > 0 && <ToolRows steps={m.steps} />}
+                        <div className="hx-text">{m.content}</div>
+                      </div>
+                    </div>
+                  )
+              ))}
+              {working && (
+                <div className="hx-msg hx-assistant live">
+                  {avatar ? <img src={avatar} alt="" className="hx-avatar small" /> : <span className="hx-avatar small" />}
+                  <div className="hx-assistant-body">
+                    <PlanBox plan={plan} />
+                    {interim.map((t, i) => <p key={i} className="hx-interim">{t}</p>)}
+                    {liveSteps.length > 0 && <ToolRows steps={liveSteps} />}
+                    {confirms.map((c) => <PermissionCard key={c.confirmId} req={c} answer={answer} onEdit={(p) => setText(p)} />)}
+                    {streaming !== null && (streaming ? <div className="hx-text">{streaming}</div> : confirms.length === 0 && <div className="hx-thinking"><span /><span /><span /></div>)}
+                  </div>
+                </div>
+              )}
+              {commandReply && <pre className="hx-command">{commandReply}</pre>}
+              {notice && <p className="hx-notice">{notice}</p>}
+            </div>
           </div>
-        ))}
-        {working && (plan.length > 0 || steps.length > 0 || interim.length > 0) && (
-          <div className="agent-live">
-            {plan.length > 0 && (
-              <ol className="agent-plan">
-                {plan.map((p, i) => <li key={i} className={`plan-${p.status}`}><span>{PLAN_ICON[p.status]}</span>{p.title}</li>)}
-              </ol>
-            )}
-            {interim.map((t, i) => <p key={i} className="agent-interim">{t}</p>)}
-            {steps.filter((s) => s.tool !== 'update_plan').length > 0 && <Steps steps={steps.filter((s) => s.tool !== 'update_plan')} />}
-          </div>
         )}
-        {confirms.map((c) => <ConfirmCard key={c.confirmId} req={c} onEdit={(p) => setText(p)} />)}
-        {streaming !== null && (streaming || confirms.length === 0) && <div className="chat-msg chat-assistant">{streaming || '…'}</div>}
-        {notice && <p className="chat-notice">{notice}</p>}
-      </div>
+
+        <Composer
+          text={text} setText={setText} onSubmit={submit} working={working} onStop={stop} placeholder={placeholder}
+          inputRef={inputRef} attached={attached} onClearAttached={() => { setAttached([]); setHint(null); }}
+          permission={mode === 'agent' ? permissionOf(settings) : null} onPermission={setPermission}
+        />
+        <StatsBar sessionId={session?.id ?? null} stats={session?.stats ?? null} working={working} />
+      </main>
       <div
         className="resize-grip"
         title="拖动调节窗口大小"
@@ -175,16 +240,6 @@ export function ChatPanel(): JSX.Element {
           window.addEventListener('pointerup', up);
         }}
       />
-      {attached.length > 0 && (
-        <div className="chat-attach" title={attached.join('\n')}>
-          <span>📎 {attached.length === 1 ? baseName(attached[0] as string) : `${baseName(attached[0] as string)} 等 ${attached.length} 个`}</span>
-          <button type="button" onClick={() => { setAttached([]); setHint(null); }} title="不带这些文件">×</button>
-        </div>
-      )}
-      <form className="chat-form" onSubmit={submit}>
-        <input ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} placeholder={hint ?? (mode === 'agent' ? '聊天，或让她帮你做事…' : '输入消息，回车发送')} maxLength={1000} autoFocus />
-        {working ? <button type="button" onClick={stop}>停止</button> : <button type="submit" disabled={!text.trim()}>发送</button>}
-      </form>
     </div>
   );
 }
