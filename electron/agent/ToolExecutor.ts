@@ -6,6 +6,7 @@ import { stripNulls, validate } from './schema';
 import type { TaskLogger } from './TaskLogger';
 import type { TaskVerifier } from './TaskVerifier';
 import type { ToolRegistry } from './ToolRegistry';
+import type { ToolLoader } from './toolLoading';
 import type { AgentServices, DesktopPlatform, ToolContext, ToolResult, VerifyResult } from './types';
 
 export interface ToolCallRequest { id: string; name: string; arguments: string | Record<string, unknown> }
@@ -29,6 +30,8 @@ export interface TaskRuntime {
   /** Set once the task has read external content; makes medium-risk auto-approval stop. */
   tainted: boolean;
   onStep(step: AgentStepView): void;
+  /** Loads tool groups shown on demand (see toolLoading.ts). */
+  toolLoader?: ToolLoader;
 }
 
 const EXEC_TIMEOUT_MS = 180_000;
@@ -75,6 +78,7 @@ export class ToolExecutor {
       taskId: rt.taskId, platform: this.platform, signal: rt.signal, services: this.services,
       resolvePath: (p) => this.permissions.resolvePath(p, this.platform.knownFolders().home),
       log: (event, data) => this.logger.log(rt.taskId, event, { tool: tool.name, ...data }),
+      ...(rt.toolLoader ? { toolLoader: rt.toolLoader } : {}),
     };
     let title = tool.name;
     try { title = tool.title(args); } catch { /* keep the name */ }

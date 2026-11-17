@@ -30,6 +30,7 @@ import { firstMatch } from './permissionRules';
 import { SkillLibrary } from './Skills';
 import { skillTools } from './tools/skillTools';
 import { UserHooks } from './UserHooks';
+import { loadToolsTool, ToolLoading } from './toolLoading';
 
 /**
  * Built-in tools that only look (no side effects, never ask the user), so several in one step may run
@@ -71,7 +72,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   refreshSecrets();
 
   const registry = new ToolRegistry();
-  const builtins = [updatePlanTool, ...skillTools, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools];
+  const builtins = [updatePlanTool, loadToolsTool, ...skillTools, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools];
   for (const t of builtins) if (CONCURRENCY_SAFE.has(t.name)) t.concurrencySafe = true;
   registry.registerAll(builtins);
 
@@ -113,7 +114,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   replayRecaps(recaps, sessions);
   controller = new AgentController({
     registry, executor, permissions, planner, memory, logger, llm: o.llm, platform: o.platform,
-    settings: o.settings, allowedRoots, persona: o.persona, redact, hooks, recaps,
+    settings: o.settings, allowedRoots, persona: o.persona, redact, hooks, recaps, toolLoading: new ToolLoading(registry),
   });
   const ctl = controller;
   // Built-in turn plugins (order matters only for what ends up first in the log).

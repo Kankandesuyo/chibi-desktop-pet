@@ -79,6 +79,16 @@ export class WindowManager {
     win.webContents.send(IPC.cursor, inside ? { x: p.x - b.x, y: p.y - b.y } : null);
   }
 
+  /** Opens (or brings forward) the chat with the cursor in its input box. */
+  focusChat(): void {
+    this.openPanel('chat');
+    const win = this.panels.get('chat');
+    if (!win || win.isDestroyed()) return;
+    win.focus();
+    // A freshly created chat focuses its input by itself once loaded.
+    if (!win.webContents.isLoading()) win.webContents.send(IPC.chatFocus);
+  }
+
   /** Opens the chat and hands it a request about dropped files (it fetches it with takeCompose). */
   composeInChat(c: ChatCompose): void {
     this.pendingCompose = c;

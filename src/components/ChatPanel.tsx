@@ -74,6 +74,7 @@ export function ChatPanel(): JSX.Element {
       takeCompose();                                          // only after the history is in, or it would be overwritten
     });
     const offCompose = window.petAPI.onChatCompose(takeCompose);
+    const offFocus = window.petAPI.onChatFocus(() => inputRef.current?.focus());
     const offShared = window.petAPI.onSharedChat?.((s) => useChatStore.getState().sync(s));
     const offStream = window.petAPI.onAiStream((e) => useChatStore.getState().handleStream(e));
     const offAgent = window.petAPI.onAgentEvent((e) => useChatStore.getState().handleAgent(e));
@@ -88,7 +89,7 @@ export function ChatPanel(): JSX.Element {
     const onResize = (): void => setWide(window.innerWidth >= SIDEBAR_MIN_WIDTH);
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onResize);
-    return () => { offCompose(); offShared?.(); offStream(); offAgent(); offSettings(); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
+    return () => { offCompose(); offFocus(); offShared?.(); offStream(); offAgent(); offSettings(); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
   }, []);
 
   // The list changes when the session changes, and a new session gets its title from its first message.

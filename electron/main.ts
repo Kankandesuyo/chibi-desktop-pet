@@ -12,6 +12,7 @@ import { CustomCharacters, parseUserCharacterPath } from './customCharacters';
 import { IPC } from '../shared/constants';
 import { completeOnce, streamChat } from './aiClient';
 import { remote } from './remote';
+import { applyHotkey, clearHotkey, hotkeyOk } from './hotkey';
 import { createSessionConversation } from './sessionConversation';
 import { ConfigStore } from './configStore';
 import { Monologue } from './monologue';
@@ -166,7 +167,11 @@ if (!app.requestSingleInstanceLock()) {
       const icon = characterIcon(config.getSettings().character);
       return icon.isEmpty() ? '' : icon.resize({ width: 64, height: 64, quality: 'best' }).toDataURL();
     });
-    life.onSettings = () => applyCharacterIcon(windows, config.getSettings().character);
+    // The global hotkey brings her back and opens the chat ready for typing; re-registered on every settings change.
+    const summon = (): void => { windows.setPetVisible(true); windows.focusChat(); };
+    life.onSettings = () => { applyCharacterIcon(windows, config.getSettings().character); applyHotkey(config.getSettings().globalHotkey, summon); };
+    app.on('will-quit', clearHotkey);
+    ipcMain.handle('pet:hotkey-status', (e) => (windows.allWebContentsIds().includes(e.sender.id) ? { accelerator: config.getSettings().globalHotkey, ok: hotkeyOk() } : null));
     life.onSettings();
     app.setLoginItemSettings({ openAtLogin: config.getSettings().launchAtLogin });
 

@@ -8,6 +8,10 @@ export const CHARACTER_HEIGHT = 220;
 /** Half of the standing character's width, used to keep her on screen. */
 export const CHARACTER_HALF_WIDTH = 82;
 
+/** Global shortcut that summons her and the chat ('' = off). */
+export const HOTKEY_CHOICES = ['Ctrl+Shift+Space', 'Ctrl+Alt+Space', 'Ctrl+Alt+P', 'Alt+`', ''] as const;
+export const DEFAULT_HOTKEY = 'Ctrl+Shift+Space';
+
 export const SIZE_MIN = 0.4;
 export const SIZE_MAX = 1.4;
 
@@ -70,6 +74,8 @@ export const IPC = {
   cursor: 'evt:cursor',
   /** main -> chat: a compose request is waiting; call chatTakeCompose. */
   chatCompose: 'evt:chat-compose',
+  /** main -> chat: the global hotkey was pressed; put the cursor in the input box. */
+  chatFocus: 'evt:chat-focus',
 } as const;
 
 export function windowSizeFor(size: number): { width: number; height: number } {

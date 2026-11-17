@@ -56,6 +56,8 @@ export interface Settings {
   sound: boolean;
   aiEnabled: boolean;
   launchAtLogin: boolean;
+  /** System-wide shortcut that brings her back and opens the chat ('' = off). */
+  globalHotkey: string;
   /** Colours of the windows: follow the character, or a fixed theme. */
   theme: ThemeChoice;
   /** Which character is shown. */
@@ -180,6 +182,8 @@ export interface PetAPI {
   /** Chat window: the pending request about dropped files, if any (taking it clears it). */
   takeChatCompose(): Promise<ChatCompose | null>;
   onChatCompose(cb: () => void): () => void;
+  /** Chat window: the global hotkey was pressed (put the cursor in the input). */
+  onChatFocus(cb: () => void): () => void;
   // Harness: sessions (the left column of the chat), the raw event log of the current session, her face.
   sessionsList(): Promise<{ current: string; sessions: SessionSummary[] } | { error: string }>;
   sessionOpen(id: string): Promise<{ ok: true; id: string } | { error: string }>;
@@ -187,6 +191,8 @@ export interface PetAPI {
   trajectory(): Promise<{ id: string; events: TrajectoryEvent[] } | { error: string }>;
   /** Her current face as a small PNG data URL ('' if unavailable). */
   petAvatar(): Promise<string>;
+  /** Is the global hotkey registered? (ok=false: another program already uses those keys) */
+  hotkeyStatus(): Promise<{ accelerator: string; ok: boolean } | null>;
   // Shared conversation (desktop chat + remote web page), run by remote-chat/server.cjs inside the app.
   // Optional only for very old builds; the chat falls back to a local conversation without it.
   sharedState?(): Promise<SharedChatSnapshot>;

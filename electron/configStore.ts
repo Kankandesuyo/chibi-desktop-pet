@@ -3,7 +3,7 @@ import { cleanPetName, cleanTraits, DEFAULT_PET_NAME, isMonologueLevel } from '.
 import { app, safeStorage } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { SIZE_MAX, SIZE_MIN } from '../shared/constants';
+import { DEFAULT_HOTKEY, HOTKEY_CHOICES, SIZE_MAX, SIZE_MIN } from '../shared/constants';
 import { sanitizeRules } from './agent/permissionRules';
 import { TOOL_GROUPS, type AgentSettings, type McpServerConfig, type ToolGroup } from '../shared/agentTypes';
 import { EMOTIONS, type AgentSettingsPatch, type ChatMessage, type Emotion, type PetStats, type Point, type Settings } from '../shared/types';
@@ -42,7 +42,7 @@ const DEFAULT_AGENT: StoredAgent = {
 const DEFAULTS: StoredConfig = {
   settings: {
     size: 0.6, opacity: 1, speed: 1, autoMoveFrequency: 0.5, autoMove: true, allowDrag: true, gravity: false,
-    alwaysOnTop: true, sound: false, aiEnabled: false, launchAtLogin: false,
+    alwaysOnTop: true, sound: false, aiEnabled: false, launchAtLogin: false, globalHotkey: DEFAULT_HOTKEY,
     petName: DEFAULT_PET_NAME, personaTraits: '', monologue: 'normal', character: DEFAULT_CHARACTER, theme: 'auto',
   },
   ai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKeyEncrypted: '', apiKeyPlain: '' },
@@ -78,6 +78,7 @@ export function sanitizeSettings(input: unknown, base: CoreSettings): CoreSettin
     sound: bool(s.sound, base.sound),
     aiEnabled: bool(s.aiEnabled, base.aiEnabled),
     launchAtLogin: bool(s.launchAtLogin, base.launchAtLogin),
+    globalHotkey: typeof s.globalHotkey === 'string' && (HOTKEY_CHOICES as readonly string[]).includes(s.globalHotkey) ? s.globalHotkey : base.globalHotkey,
     character: isCharacterId(s.character) ? s.character : base.character,
     theme: isThemeChoice(s.theme) ? s.theme : base.theme,
     petName: cleanPetName(s.petName, base.petName),

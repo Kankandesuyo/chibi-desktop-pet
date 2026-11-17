@@ -4,7 +4,7 @@ import type { AgentSettingsPatch, Settings } from '../../shared/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   size: 0.6, opacity: 1, speed: 1, autoMoveFrequency: 0.5, autoMove: true, allowDrag: true, gravity: false, alwaysOnTop: true,
-  sound: false, aiEnabled: false, launchAtLogin: false, character: 'orange', theme: 'auto', petName: '小橘', personaTraits: '', monologue: 'normal',
+  sound: false, aiEnabled: false, launchAtLogin: false, globalHotkey: 'Ctrl+Shift+Space', character: 'orange', theme: 'auto', petName: '小橘', personaTraits: '', monologue: 'normal',
   ai: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat', hasApiKey: false },
   agent: {
     enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true, toolProtocol: 'auto', maxSteps: 25,

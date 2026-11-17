@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, globalShortcut, screen } from 'electron';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -263,9 +263,11 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
       await sleep(300);
       fs.writeFileSync(path.join(dir, '14_agent_settings.png'), (await settingsWin.webContents.capturePage()).toPNG());
       const text = (await settingsWin.webContents.executeJavaScript('document.body.innerText')) as string;
+      const text0 = text;
       await settingsWin.webContents.executeJavaScript('[...document.querySelectorAll("h3")].find((h) => h.textContent === "技能")?.scrollIntoView(); "ok"');
       await sleep(300);
       fs.writeFileSync(path.join(dir, '14b_skills_rules_hooks.png'), (await settingsWin.webContents.capturePage()).toPNG());
+      log.push({ step: '14b_hotkey', accelerator: config.getSettings().globalHotkey, registered: globalShortcut.isRegistered(config.getSettings().globalHotkey), settingShown: text0.includes('呼出她的快捷键') });
       log.push({ step: '14_settings', hasPersonaSection: text.includes('她自己') && text.includes('自言自语'), hasAgentSection: text.includes('智能体'), memoryShown: text.includes('记忆'), tasksShown: text.includes('建一个叫'), phase3: { skills: text.includes('打开技能文件夹') && text.includes('照片按日期归档'), rules: text.includes('保存权限规则'), hooks: text.includes('没有配置钩子'), instructions: text.includes('编辑长期守则') } });
       // Theme: switching in settings recolours every window at once; "auto" follows the character.
       const accent = (w: BrowserWindow): Promise<string> => w.webContents.executeJavaScript('document.documentElement.dataset.theme + " " + getComputedStyle(document.documentElement).getPropertyValue("--orange").trim()') as Promise<string>;

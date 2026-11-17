@@ -18,7 +18,7 @@ const C = {
   charactersList: 'characters:list', charactersOpenFolder: 'characters:open-folder', charactersReloadPet: 'characters:reload-pet',
   charactersCreate: 'characters:create',
   filesDropped: 'pet:files-dropped', chatTakeCompose: 'chat:take-compose', cursor: 'evt:cursor', chatCompose: 'evt:chat-compose',
-  agentCommand: 'agent:command',
+  agentCommand: 'agent:command', chatFocus: 'evt:chat-focus',
 } as const;
 
 function listen<T>(channel: string) {
@@ -63,6 +63,7 @@ const api: PetAPI = {
   sessionNew: () => ipcRenderer.invoke('chat:session-new'),
   trajectory: () => ipcRenderer.invoke('chat:trajectory'),
   petAvatar: () => ipcRenderer.invoke('pet:avatar'),
+  hotkeyStatus: () => ipcRenderer.invoke('pet:hotkey-status'),
   // One shared conversation for the desktop chat and the remote web page (owned by remote-chat/server.cjs).
   sharedState: () => ipcRenderer.invoke('chat:shared-state'),
   sharedSend: (text) => ipcRenderer.invoke('chat:shared-send', text),
@@ -91,6 +92,7 @@ const api: PetAPI = {
   onCursor: listen(C.cursor),
   takeChatCompose: () => ipcRenderer.invoke(C.chatTakeCompose),
   onChatCompose: listen(C.chatCompose),
+  onChatFocus: listen(C.chatFocus),
 };
 
 contextBridge.exposeInMainWorld('petAPI', api);

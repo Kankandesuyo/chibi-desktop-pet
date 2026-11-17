@@ -101,6 +101,8 @@ export interface ToolContext {
   resolvePath(p: string): string;
   services: AgentServices;
   log(event: string, data: Record<string, unknown>): void;
+  /** Present when tool groups are shown on demand (load_tools). */
+  toolLoader?: import('./toolLoading').ToolLoader;
 }
 
 /** Long-lived helpers a tool may need. */

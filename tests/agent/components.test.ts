@@ -232,13 +232,19 @@ describe('plugins and MCP', () => {
     await h.rt.plugins.reloadAll();
     expect(h.rt.plugins.info().find((p) => p.kind === 'mcp')).toMatchObject({ status: 'loaded', tools: ['mcp_echo__echo', 'mcp_echo__add'] });
     h.llm.push(
+      // With many tools, plugin / MCP tools are a group loaded on demand.
+      call('load_tools', { groups: ['plugins'] }),
       call('mcp_echo__add', { a: 2, b: 3 }),
       (m) => { const r = lastToolResult(m); expect((r.data as { structured: { sum: number } }).structured.sum).toBe(5); return call('mcp_echo__echo', { text: '你好' }); },
       (m) => { expect(JSON.stringify(lastToolResult(m).data)).toContain('echo: 你好'); return say('5'); },
     );
     const r = await h.run('2+3');
     expect(r.done?.outcome).toBe('success');
-    expect(h.llm.requests[0]?.tools?.map((t) => t.function.name)).toContain('mcp_echo__add');
+    const harness = h;
+    const offered = (i: number) => harness.llm.requests[i]?.tools?.map((t) => t.function.name) ?? [];
+    expect(offered(0)).not.toContain('mcp_echo__add');
+    expect(String(h.llm.requests[0]?.messages[0]?.content)).toMatch(/plugins（2 个）/);
+    expect(offered(1)).toContain('mcp_echo__add');
   });
 
   it('quotes the MCP launch command for cmd.exe on Windows only', () => {

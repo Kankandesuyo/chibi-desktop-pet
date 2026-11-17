@@ -57,16 +57,17 @@ export class ToolRegistry {
     return this.listAll().map((t) => ({ name: t.name, group: t.group, risk: t.riskLevel, description: t.description, source: t.source ?? 'builtin' }));
   }
 
-  toOpenAiTools(): OpenAiTool[] {
-    return this.list().map((t) => ({
+  /** `only` limits the list (tool groups loaded on demand); the default is every enabled tool. */
+  toOpenAiTools(only?: (t: AnyTool) => boolean): OpenAiTool[] {
+    return this.list().filter((t) => !only || only(t)).map((t) => ({
       type: 'function',
       function: { name: t.name, description: `${t.description}（风险：${riskLabel(t.riskLevel)}）`, parameters: t.inputSchema },
     }));
   }
 
   /** Compact catalogue for models without native tool calling. */
-  toPromptCatalog(): string {
-    return this.list().map((t) => `- ${t.name}: ${t.description}\n  参数 JSON Schema: ${JSON.stringify(t.inputSchema)}`).join('\n');
+  toPromptCatalog(only?: (t: AnyTool) => boolean): string {
+    return this.list().filter((t) => !only || only(t)).map((t) => `- ${t.name}: ${t.description}\n  参数 JSON Schema: ${JSON.stringify(t.inputSchema)}`).join('\n');
   }
 }
 

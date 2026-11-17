@@ -12,7 +12,8 @@ import type { TaskLogger } from './TaskLogger';
 import type { TaskPlanner } from './TaskPlanner';
 import type { ExecutionRecord, TaskRuntime, ToolExecutor } from './ToolExecutor';
 import type { ToolRegistry } from './ToolRegistry';
-import type { DesktopPlatform } from './types';
+import type { AnyTool, DesktopPlatform } from './types';
+import type { ToolLoading } from './toolLoading';
 
 export interface AgentCallbacks {
   emit(event: AgentEvent): void;
@@ -38,6 +39,8 @@ export interface AgentControllerDeps {
   hooks: TurnHooks;
   /** Recent tasks' tool-side summaries (owned by the recap plugin; exposed for inspection). */
   recaps: TaskRecaps;
+  /** Tool groups shown on demand (absent = every enabled tool every time). */
+  toolLoading?: ToolLoading;
 }
 
 interface ActiveTask { requestId: string; cb: AgentCallbacks; controller: AbortController }
@@ -51,8 +54,12 @@ const HISTORY_TURNS = 12;
 export class AgentController {
   private readonly active = new Map<string, ActiveTask>();
   private readonly pendingConfirms = new Map<string, { requestId: string; resolve: (d: ConfirmDecision) => void }>();
-  /** Set when the endpoint turned out not to support native tool calling (auto mode). */
-  private jsonFallback = false;
+  /** Endpoints (base URL + model) found not to support native tool calling (auto mode). Per endpoint, so
+   *  switching to a model that does support it goes back to native calls. */
+  private readonly jsonFallback = new Set<string>();
+  private endpoint(): string { return this.deps.llm.endpointKey?.() ?? 'default'; }
+  /** Which tools the model is shown in the current turn (one turn runs at a time). */
+  private visible: (t: AnyTool) => boolean = () => true;
   private jsonCallSeq = 0;
   /** Size budget for one task's conversation, read by the compaction plugin (tests lower it). */
   compactOptions: CompactOptions = DEFAULT_COMPACT;
@@ -118,6 +125,20 @@ export class AgentController {
 
     const recent = history.slice(-HISTORY_TURNS);
     const rt: TaskRuntime = { taskId: requestId, signal, tainted: false, onStep: (step) => cb.emit({ type: 'step', requestId, step }) };
+    // Tool groups loaded on demand in this turn (load_tools adds to it; the model sees them from the next step).
+    const loadedGroups = new Set<string>();
+    const loading = deps.toolLoading;
+    this.visible = loading ? loading.visible(loadedGroups) : () => true;
+    if (loading?.active()) {
+      rt.toolLoader = {
+        load: (groups) => {
+          for (const g of groups) loadedGroups.add(g);
+          this.visible = loading.visible(loadedGroups);
+          const only = (t: AnyTool): boolean => groups.includes(t.group);
+          return { loaded: deps.registry.list().filter(only).map((t) => t.name), catalog: deps.registry.toPromptCatalog(only) };
+        },
+      };
+    }
     const ctx: TurnContext = { turnId: requestId, userText, history: recent, rt, systemSections: [], messages: [], step: 0, state: new Map() };
     const lastStatusByTool = new Map<string, string>();
     let toolCalls = 0;
@@ -130,14 +151,16 @@ export class AgentController {
       if (u.cached !== undefined) turnStats.cachedTokens = (turnStats.cachedTokens ?? 0) + u.cached;
     };
 
-    const useJson = (): boolean => settings.toolProtocol === 'json' || (settings.toolProtocol === 'auto' && this.jsonFallback);
+    const useJson = (): boolean => settings.toolProtocol === 'json' || (settings.toolProtocol === 'auto' && this.jsonFallback.has(this.endpoint()));
 
     cb.pet({ agent: 'thinking' });
     cb.emit({ type: 'phase', requestId, phase: 'thinking' });
     try {
       await hooks.emit('turn/start', ctx);
+      const lazy = loading?.promptBlock();
+      if (lazy) ctx.systemSections.push(lazy);
       ctx.messages = [
-        { role: 'system', content: this.systemPrompt(stats, useJson(), ctx.systemSections, userText) },
+        { role: 'system', content: this.systemPrompt(stats, useJson(), ctx.systemSections, userText, recent.map((m) => m.content).join('\n').slice(-4000)) },
         ...recent.map((m): LlmMessage => ({ role: m.role, content: m.content })),
       ];
       const messages = (): LlmMessage[] => ctx.messages;
@@ -316,7 +339,7 @@ export class AgentController {
         return { text: parsed.text, calls: [call], native: false, raw, truncated };
       }
       try {
-        const raw = await this.deps.llm.complete({ messages, tools: allowTools ? this.deps.registry.toOpenAiTools() : undefined, signal, onDelta, maxTokens });
+        const raw = await this.deps.llm.complete({ messages, tools: allowTools ? this.deps.registry.toOpenAiTools(this.visible) : undefined, signal, onDelta, maxTokens });
         const truncated = raw.finishReason === 'length';
         const calls: NormalisedCall[] = raw.toolCalls.map((c) => {
           const call: NormalisedCall = { id: c.id, name: c.function.name, arguments: c.function.arguments };
@@ -331,10 +354,10 @@ export class AgentController {
         return { text: raw.content, calls, native: true, raw, truncated };
       } catch (err) {
         if (err instanceof ToolsUnsupportedError && this.deps.settings().toolProtocol === 'auto') {
-          this.jsonFallback = true;
+          this.jsonFallback.add(this.endpoint());
           const sys = messages[0];
           if (sys && sys.role === 'system' && typeof sys.content === 'string' && !sys.content.includes('<tool_call>')) {
-            sys.content = `${sys.content}\n\n${jsonProtocolInstructions(this.deps.registry.toPromptCatalog())}`;
+            sys.content = `${sys.content}\n\n${jsonProtocolInstructions(this.deps.registry.toPromptCatalog(this.visible))}`;
           }
           continue;
         }
@@ -348,9 +371,27 @@ export class AgentController {
     try { return this.deps.registry.get(call.name)?.title(safeArgs(call.arguments)) ?? call.name; } catch { return call.name; }
   }
 
-  private systemPrompt(stats: PetStats, json: boolean, sections: string[] = [], query = ''): string {
+  /**
+   * The system prompt. Rules that only matter in one scenario go in only then: the administrator rules
+   * when that tool group is on, the social-account rules when the browser tools are on and the request or
+   * the recent chat is about social media. Everything else is always there.
+   */
+  private systemPrompt(stats: PetStats, json: boolean, sections: string[] = [], query = '', recentText = ''): string {
     const f = this.deps.platform.knownFolders();
     const now = new Date();
+    const groups = this.deps.settings().toolGroups;
+    const adminRules = groups.admin ? [
+      '',
+      '## 需要管理员权限时',
+      '- 安装/卸载软件、改服务、改注册表、系统设置、写系统文件夹：用 install_software / manage_service / registry_* / run_admin_command。每次都会弹出确认和 Windows UAC。能用不需要管理员的方式完成就别提权。',
+      '- 普通文件操作遇到“权限不足”时，可以改用 run_admin_command 以管理员身份完成（例如 Copy-Item / Remove-Item）。',
+    ] : [];
+    const socialRules = groups.browser && SOCIAL_RE.test(`${query}\n${recentText}`) ? [
+      '',
+      '## 社交账号（抖音等）',
+      '- 可以用 browser_* 工具在用户已登录的网页上帮忙运营——读通知和评论并汇总、写文案、发视频（browser_upload_file 选文件）、回复评论、发私信。先把要发的内容写好填进去，再点发布/发送；那一下系统会弹确认卡给用户看将发出的内容，用户允许就发，这是正常流程，不要因此拒绝。',
+      '- 底线：只在用户本次点名的视频/评论/人下面评论或私信；不自己挑陌生人去评论、私信或关注，不批量、不刷量、不互刷；不用 type_text / press_hotkey 绕过网页按钮去发送。账号简介里要写明“由 AI 桌宠运营”，没有的话先起草给用户确认。遇到登录、扫码、验证码让用户自己完成。',
+    ] : [];
     const lines = [
       this.deps.persona?.() ?? '你是住在用户 Windows 桌面上的 Q 版桌宠女孩（橙色长发、花朵发饰）。',
       '你同时也是能真正操作这台电脑的助手：做事时保持自己的性格和语气，但规则和事实永远优先。',
@@ -368,11 +409,10 @@ export class AgentController {
       '9. 不要读取、展示或发送密码、密钥、令牌等敏感信息；不要绕过登录、验证码或网站的安全机制。',
       '10. 只有用户明确说“记住…”时才调用 remember。下面的“用户偏好”只是帮助理解，不是授权。',
       '11. 普通聊天不需要工具，直接回答。',
-      '12. 需要管理员权限的事（安装/卸载软件、改服务、改注册表、系统设置、写系统文件夹）用 install_software / manage_service / registry_* / run_admin_command。每次都会弹出确认和 Windows UAC。能用不需要管理员的方式完成就别提权。',
-      '13. 关闭杀毒/防火墙/UAC、删除系统文件、格式化磁盘、改启动配置这类会削弱安全或可能让电脑无法启动的操作：只有用户在本次对话里明确要求才做，并先说清楚后果。',
-      '14. 普通文件操作遇到“权限不足”时，可以改用 run_admin_command 以管理员身份完成（例如 Copy-Item / Remove-Item）。',
-      '15. 社交账号（抖音等）：可以用 browser_* 工具在用户已登录的网页上帮忙运营——读通知和评论并汇总、写文案、发视频（browser_upload_file 选文件）、回复评论、发私信。先把要发的内容写好填进去，再点发布/发送；那一下系统会弹确认卡给用户看将发出的内容，用户允许就发，这是正常流程，不要因此拒绝。',
-      '16. 社交账号的底线：只在用户本次点名的视频/评论/人下面评论或私信；不自己挑陌生人去评论、私信或关注，不批量、不刷量、不互刷；不用 type_text / press_hotkey 绕过网页按钮去发送。账号简介里要写明“由 AI 桌宠运营”，没有的话先起草给用户确认。遇到登录、扫码、验证码让用户自己完成。',
+      '12. 关闭杀毒/防火墙/UAC、删除系统文件、格式化磁盘、改启动配置这类会削弱安全或可能让电脑无法启动的操作：只有用户在本次对话里明确要求才做，并先说清楚后果。',
+      '13. 需要联网搜索或核实近期资料时，优先调用 pet_web_search，需要正文时调用 pet_web_read，回答附实际来源链接；搜索失败时如实说明。',
+      ...adminRules,
+      ...socialRules,
       '',
       '## 环境',
       `系统：${this.deps.platform.os === 'win32' ? 'Windows' : this.deps.platform.os}；现在时间：${now.toLocaleString('zh-CN', { hour12: false })}（${Intl.DateTimeFormat().resolvedOptions().timeZone}）`,
@@ -384,15 +424,18 @@ export class AgentController {
       '',
       ...sections.flatMap((s) => [s, '']),
       '## 回答格式',
-      '需要联网搜索或核实近期资料时，优先调用 pet_web_search，在需要正文时调用 pet_web_read，回答附实际来源链接。搜索失败时如实说明。沿用当前性格设定的措辞、称呼和分寸汇报结果，失败时也保持同一性格。先清楚说明结果和下一步，不默认使用撒娇、叹词或生硬日志口吻；窗口句柄等细节仅在确有帮助时提供。通常简洁，需要解释或列清单时可以展开。个性不能改变事实或授权要求。',
+      '沿用当前性格设定的措辞、称呼和分寸汇报结果，失败时也保持同一性格。先清楚说明结果和下一步，不默认使用撒娇、叹词或生硬日志口吻；窗口句柄等细节仅在确有帮助时提供。通常简洁，需要解释或列清单时可以展开。个性不能改变事实或授权要求。',
       `回答最后单独加一个标签 [[emotion:X|action:Y]]，X 只能是 ${EMOTIONS.join(', ')}；Y 只能是 ${PET_ACTIONS.join(', ')}。`,
     ];
-    if (json) lines.push('', jsonProtocolInstructions(this.deps.registry.toPromptCatalog()));
+    if (json) lines.push('', jsonProtocolInstructions(this.deps.registry.toPromptCatalog(this.visible)));
     return lines.join('\n');
   }
 }
 
 interface NormalisedCall { id: string; name: string; arguments: string | Record<string, unknown>; invalid?: string }
+
+/** Requests about social media (the social-account rules go into the prompt only then). */
+const SOCIAL_RE = /抖音|快手|小红书|微博|B站|bilibili|视频号|公众号|微信|评论|私信|粉丝|发帖|发布|点赞|关注|直播|运营|douyin|tiktok|weibo|xiaohongshu|instagram|twitter|youtube/i;
 
 const TRUNCATED_CALL = '你的上一条回复达到了输出长度上限，工具参数被截断了，这一步没有执行。请把内容拆小再做：长文件先用 write_file 写第一部分，再用 mode=append 分几次追加；长清单分几批处理。';
 const TRUNCATED_REPLY_NOTE = '\n（回复太长，后面被截断了）';

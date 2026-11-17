@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
-import { SIZE_MAX, SIZE_MIN } from '../../shared/constants';
+import { HOTKEY_CHOICES, SIZE_MAX, SIZE_MIN } from '../../shared/constants';
 import type { Settings } from '../../shared/types';
 import { useSettingsStore } from '../store/settingsStore';
 import { AgentSettingsPanel } from './AgentSettingsPanel';
@@ -121,6 +121,19 @@ function PersonaSection(props: { settings: Settings }): JSX.Element {
 }
 
 type NumberKey = 'size' | 'opacity' | 'speed' | 'autoMoveFrequency';
+/** The global shortcut, with whether Windows actually gave it to us (another program may own it). */
+function HotkeyRow({ settings }: { settings: Settings }): JSX.Element {
+  const [status, setStatus] = useState<{ accelerator: string; ok: boolean } | null>(null);
+  useEffect(() => { void window.petAPI.hotkeyStatus().then(setStatus); }, [settings.globalHotkey]);
+  const taken = status && status.accelerator === settings.globalHotkey && settings.globalHotkey && !status.ok;
+  return (
+    <label className="row"><span>呼出她的快捷键<small>{taken ? `⚠ ${settings.globalHotkey} 已经被别的软件占用了，请换一个。` : '在任何地方按下，她会出现并打开聊天框，可以直接打字。'}</small></span>
+      <select value={settings.globalHotkey} onChange={(e) => void useSettingsStore.getState().update({ globalHotkey: e.target.value })}>
+        {HOTKEY_CHOICES.map((k) => <option key={k} value={k}>{k || '关闭'}</option>)}
+      </select></label>
+  );
+}
+
 type BoolKey = 'autoMove' | 'allowDrag' | 'gravity' | 'alwaysOnTop' | 'sound' | 'aiEnabled' | 'launchAtLogin';
 
 function Slider(props: { label: string; field: NumberKey; min: number; max: number; step: number; settings: Settings; format: (v: number) => string }): JSX.Element {
@@ -188,6 +201,7 @@ export function SettingsPanel(): JSX.Element {
       <Toggle label="始终置顶" field="alwaysOnTop" settings={settings} />
       <Toggle label="音效" field="sound" settings={settings} />
       <Toggle label="开机启动" field="launchAtLogin" settings={settings} />
+      <HotkeyRow settings={settings} />
 
       <PersonaSection settings={settings} />
 

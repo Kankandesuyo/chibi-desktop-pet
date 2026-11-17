@@ -23,7 +23,11 @@ export interface LlmRequest {
   maxTokens?: number;
 }
 
-export interface LlmClient { complete(req: LlmRequest): Promise<LlmTurn> }
+export interface LlmClient {
+  complete(req: LlmRequest): Promise<LlmTurn>;
+  /** Which endpoint + model this is (things learned about one endpoint must not stick to another). */
+  endpointKey?(): string;
+}
 
 export interface EndpointConfig { baseUrl: string; apiKey: string; model: string }
 
@@ -141,6 +145,8 @@ export class OpenAiCompatibleClient implements LlmClient {
   private readonly noStreamUsage = new Set<string>();
 
   constructor(private readonly config: () => EndpointConfig) {}
+
+  endpointKey(): string { const c = this.config(); return `${c.baseUrl}|${c.model}`; }
 
   async complete(req: LlmRequest): Promise<LlmTurn> {
     const cfg = this.config();
