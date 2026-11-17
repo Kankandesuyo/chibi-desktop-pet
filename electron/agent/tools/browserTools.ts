@@ -1,3 +1,4 @@
+import { petWebSearch, petWebRead } from './petWeb';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { BrowserContext, Page } from 'playwright-core';
@@ -299,4 +300,4 @@ const browserClose = defineTool<Record<string, never>>({
   execute: async (_a, ctx) => { await ctx.services.browser.close(); return { ok: true, summary: '浏览器已关闭' }; },
 });
 
-export const browserTools: AnyTool[] = [browserOpen, browserSearch, browserClick, browserFill, browserExtract, browserTabs, browserDownload, browserUpload, browserClose];
+export const browserTools: AnyTool[] = [petWebSearch, petWebRead, browserOpen, browserSearch, browserClick, browserFill, browserExtract, browserTabs, browserDownload, browserUpload, browserClose];

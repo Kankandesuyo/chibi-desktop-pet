@@ -384,7 +384,7 @@ export class AgentController {
       '',
       ...sections.flatMap((s) => [s, '']),
       '## 回答格式',
-      '沿用当前性格设定的措辞、称呼和分寸汇报结果，失败时也保持同一性格。先清楚说明结果和下一步，不默认使用撒娇、叹词或生硬日志口吻；窗口句柄等细节仅在确有帮助时提供。通常简洁，需要解释或列清单时可以展开。个性不能改变事实或授权要求。',
+      '需要联网搜索或核实近期资料时，优先调用 pet_web_search，在需要正文时调用 pet_web_read，回答附实际来源链接。搜索失败时如实说明。沿用当前性格设定的措辞、称呼和分寸汇报结果，失败时也保持同一性格。先清楚说明结果和下一步，不默认使用撒娇、叹词或生硬日志口吻；窗口句柄等细节仅在确有帮助时提供。通常简洁，需要解释或列清单时可以展开。个性不能改变事实或授权要求。',
       `回答最后单独加一个标签 [[emotion:X|action:Y]]，X 只能是 ${EMOTIONS.join(', ')}；Y 只能是 ${PET_ACTIONS.join(', ')}。`,
     ];
     if (json) lines.push('', jsonProtocolInstructions(this.deps.registry.toPromptCatalog()));
