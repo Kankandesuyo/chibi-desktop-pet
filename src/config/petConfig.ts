@@ -54,6 +54,7 @@ export const DEFAULT_STATE_POSES: Record<PetState | 'run:right', string[]> = {
   sleeping: ['closed-smile'],
   waking: ['idle'],
   talking: ['idle'],
+  eating: ['idle'],
 };
 
 export const LINES = {

@@ -401,7 +401,8 @@ export class AnimationController {
         fps = (i.speed / (seq.stepLength * this.baseScale * grip)) * (seq.frames.length / seq.stepsPerCycle);
         fps = Math.max(2.5, Math.min(24, fps));
       }
-      if (!this.framePose) this.framePhase = seq.frames.length > 2 ? 1 : 0;   // set off from the feet-together frame
+      // Walks set off from the feet-together frame; scenes (eating…) start at their first frame.
+      if (!this.framePose) this.framePhase = seq.stepLength > 0 && seq.frames.length > 2 ? 1 : 0;
       this.framePhase += dt * fps;
       frame = seq.frames[Math.floor(this.framePhase) % seq.frames.length] ?? null;
       // Dissolve from one drawn frame into the next instead of a hard cut: all the way through the frame when

@@ -12,6 +12,8 @@ export interface SchedulerContext {
   idleFor: number;
   angry: boolean;
   nightTime: boolean;
+  /** Extra scenes this character has art for (e.g. 'eating'); each is as likely as looking around. */
+  scenes?: readonly PetState[];
 }
 
 /**
@@ -41,6 +43,7 @@ export class BehaviorScheduler {
     if (ctx.angry) return 'sway';
 
     const table: [AutoAction, number][] = [['lookAround', 2], ['sway', 2], ['hop', 1]];
+    for (const scene of ctx.scenes ?? []) table.push([scene, 3]);
     // Walking (either way) and running are equally likely.
     if (ctx.autoMove) table.push(['turnLeft', 2], ['turnRight', 2], ['run', 4]);
     const total = table.reduce((s, [, w]) => s + w, 0);

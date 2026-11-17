@@ -580,6 +580,86 @@
       ],
       "hem": 490,
       "source": "GPT 步行精灵表（朝右，2026-11-17）第 3 帧；手臂摆动由 tools/arm_swing.py 统一"
+    },
+    "eat-1": {
+      "file": "eat-1.png",
+      "bounds": [
+        170,
+        111,
+        314,
+        441
+      ],
+      "source": "eat sheet (2x4)"
+    },
+    "eat-2": {
+      "file": "eat-2.png",
+      "bounds": [
+        170,
+        111,
+        314,
+        441
+      ],
+      "source": "eat sheet (2x4)"
+    },
+    "eat-3": {
+      "file": "eat-3.png",
+      "bounds": [
+        171,
+        111,
+        313,
+        441
+      ],
+      "source": "eat sheet (2x4)"
+    },
+    "eat-4": {
+      "file": "eat-4.png",
+      "bounds": [
+        170,
+        111,
+        314,
+        441
+      ],
+      "source": "eat sheet (2x4)"
+    },
+    "eat-5": {
+      "file": "eat-5.png",
+      "bounds": [
+        170,
+        111,
+        314,
+        441
+      ],
+      "source": "eat sheet (2x4)"
+    },
+    "eat-6": {
+      "file": "eat-6.png",
+      "bounds": [
+        170,
+        111,
+        314,
+        442
+      ],
+      "source": "eat sheet (2x4)"
+    },
+    "eat-7": {
+      "file": "eat-7.png",
+      "bounds": [
+        171,
+        111,
+        314,
+        441
+      ],
+      "source": "eat sheet (2x4)"
+    },
+    "eat-8": {
+      "file": "eat-8.png",
+      "bounds": [
+        170,
+        111,
+        314,
+        442
+      ],
+      "source": "eat sheet (2x4)"
     }
   },
   "states": {
@@ -649,6 +729,9 @@
     ],
     "landing": [
       "idle"
+    ],
+    "eating": [
+      "eat-1"
     ]
   },
   "sequences": {
@@ -714,6 +797,21 @@
       "frameDurationMs": 95,
       "approximateMirroring": true,
       "stepLength": 150
+    },
+    "eating": {
+      "frames": [
+        "eat-1",
+        "eat-2",
+        "eat-3",
+        "eat-4",
+        "eat-5",
+        "eat-6",
+        "eat-5",
+        "eat-6",
+        "eat-7",
+        "eat-8"
+      ],
+      "frameDurationMs": 280
     }
   },
   "procedural": {

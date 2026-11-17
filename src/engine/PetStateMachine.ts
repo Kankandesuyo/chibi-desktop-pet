@@ -33,6 +33,8 @@ export const STATE_SPECS: Record<PetState, StateSpec> = {
   sleeping: { priority: PRIORITY.auto, duration: [25, 70], next: 'waking' },
   waking: { priority: PRIORITY.interact, duration: 0.9, next: 'idle' },
   talking: { priority: PRIORITY.talk, duration: 30, next: 'idle' },
+  // The engine sets the real length (whole bites of the drawn sequence); this range is only a safety net.
+  eating: { priority: PRIORITY.auto, duration: [3, 9], next: 'idle' },
 };
 
 const DRAG_GROUP: readonly PetState[] = ['dragStart', 'dragging', 'struggling'];
@@ -96,6 +98,11 @@ export class PetStateMachine {
     this.elapsed = 0;
     this.limit = d === null ? null : typeof d === 'number' ? d : d[0] + (d[1] - d[0]) * this.rng();
     if (prev !== next) for (const fn of this.listeners) fn(next, prev);
+  }
+
+  /** Replace the running timer (e.g. so a drawn sequence can finish a whole cycle). */
+  setDuration(seconds: number): void {
+    if (this.limit !== null && Number.isFinite(seconds) && seconds > 0) this.limit = seconds;
   }
 
   /** Shorten or extend the running timer (e.g. petting continues while the hand keeps moving). */

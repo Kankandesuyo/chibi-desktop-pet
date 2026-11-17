@@ -62,6 +62,15 @@
 `jump`、`dragStart`、`dragging`、`struggling`、`falling`、`landing`、`petting`、`happy`、`shy`、`angry`、
 `sleeping`、`waking`、`talking`。没写的状态会用 `idle` 加程序动作代替。
 
+**随机小场景**：`eating`（吃饭）只在清单的 `sequences` 里有同名帧序列时才会出现，
+空闲时和张望、走动一起被随机挑中；每次随机吃 1～3 口，总是播完整一口才停。写法参考内置鲸鱼女仆：
+
+```json
+"sequences": {
+  "eating": { "frames": ["eat-1", "eat-2", "eat-3", "eat-4", "eat-5", "eat-6", "eat-5", "eat-6", "eat-7", "eat-8"], "frameDurationMs": 280 }
+}
+```
+
 文件夹里没写进 `poses` 的 PNG 也会以文件名自动注册成一个姿势。
 
 ## 出问题时

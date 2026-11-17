@@ -7,6 +7,8 @@ export const PET_STATES = [
   'idle', 'blink', 'lookAround', 'walkLeft', 'walkRight', 'run', 'turnLeft', 'turnRight', 'jump',
   'dragStart', 'dragging', 'struggling', 'falling', 'landing', 'petting', 'happy', 'shy', 'angry',
   'sleeping', 'waking', 'talking',
+  /** A little scene of her own (e.g. eating), only for characters whose art has a sequence for it. */
+  'eating',
 ] as const;
 export type PetState = (typeof PET_STATES)[number];
 

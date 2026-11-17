@@ -22,6 +22,9 @@ export interface EngineHooks {
   say(text: string, ms?: number): void;
 }
 
+/** States that only exist when the character's manifest has a drawn sequence for them. */
+const SCENE_STATES: readonly PetState[] = ['eating'];
+
 const MOTION_STATES: readonly PetState[] = [
   'walkLeft', 'walkRight', 'run', 'turnLeft', 'turnRight', 'jump', 'dragStart', 'dragging', 'struggling',
   'falling', 'landing', 'happy', 'petting',
@@ -37,6 +40,8 @@ export class PetEngine implements InteractionHost {
   private machine = new PetStateMachine();
   private blink = new BlinkController();
   private scheduler = new BehaviorScheduler();
+  /** Scenes (states with their own drawn sequence) this character can play at random; set once the art is loaded. */
+  private scenes: PetState[] = [];
   private drag = new DragController({ struggleAfter: TUNING.struggleAfter });
   private holdSayAt = 0;
   /** Idle mouth: she rests with it closed or open, and it flaps while she talks. */
@@ -83,6 +88,7 @@ export class PetEngine implements InteractionHost {
       resolution: Math.min(window.devicePixelRatio || 1, 3), resizeTo: window, preference: 'webgl',
     });
     await this.sprites.load();
+    this.scenes = SCENE_STATES.filter((s) => this.sprites.sequence(s));
     if (this.destroyed) return;
 
     this.anim = new AnimationController(this.sprites);
@@ -129,7 +135,7 @@ export class PetEngine implements InteractionHost {
     const auto = this.scheduler.update(dt, {
       state: m.state, autoMove: this.settings.autoMove, frequency: this.settings.autoMoveFrequency,
       sleepy: this.emotion.isSleepy(), idleFor: this.emotion.idleFor, angry: this.emotion.isAngry(),
-      nightTime: hour >= 23 || hour < 6,
+      nightTime: hour >= 23 || hour < 6, scenes: this.scenes,
     });
     if (auto === 'sway') { this.idleVariant = 'sway'; this.variantLeft = 3; }
     else if (auto === 'hop') { this.poseOverride = 'jump'; m.request('jump'); }
@@ -241,6 +247,13 @@ export class PetEngine implements InteractionHost {
     if (next === 'waking') { this.hooks.say(pick(LINES.wake)); this.api.petEvent('woke'); }
     if (next === 'sleeping') { this.effectTimer = 0.6; this.api.petEvent('slept'); }
     if (next === 'jump') this.sound.play('jump');
+    if (SCENE_STATES.includes(next)) {
+      // Play the drawn sequence a random number of whole times (1–3 bites), never stopping mid-way.
+      // The animation runs on real time, the state timer on time scaled by the speed setting.
+      const seq = this.sprites.sequence(next);
+      if (seq) this.machine.setDuration((seq.frames.length / seq.fps) * (1 + Math.floor(Math.random() * 3)) * this.settings.speed);
+      else this.machine.force('idle');
+    }
     if (!this.machine.isDragging() && next !== 'falling') this.grabPoint = null;
   }
 

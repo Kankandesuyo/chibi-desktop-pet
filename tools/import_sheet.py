@@ -5,6 +5,7 @@ All cells get one scale: the reference cell (a plain standing pose) becomes the 
 the anchor, lowest pixel on the floor line. Small detached marks (sweat drops, motion lines, Zzz) are dropped — the app
 draws its own effects. holes.json lists points inside white background pockets enclosed by hair: {"name": [[x, y], ...]}
 in cell pixels. Writes <name>.png and sheet.generated.json (bounds per pose). The sheet itself is not modified.
+Sheets that already have a transparent background (an alpha channel) are cut along that alpha instead.
 """
 import json, sys
 from pathlib import Path
@@ -19,13 +20,29 @@ ref = sys.argv[5]
 HOLES = json.loads(Path(sys.argv[6]).read_text(encoding='utf-8')) if len(sys.argv) > 6 else {}
 W, H, AX, AY, STAND = 640, 580, 320, 552, 440
 
-img = Image.open(sheet_path).convert('RGB')
+src = Image.open(sheet_path)
+HAS_ALPHA = src.mode in ('RGBA', 'LA', 'PA') and (np.asarray(src.convert('RGBA').getchannel('A')) < 16).mean() > 0.1
+img = src.convert('RGBA') if HAS_ALPHA else src.convert('RGB')
 cw, ch = img.width / cols, img.height / rows
+
+
+def cut_alpha(cell: Image.Image):
+    """Transparent sheet: the figure is what the artist left opaque; stray specks are dropped, soft edges kept."""
+    alpha = np.asarray(cell.getchannel('A')).astype(int)
+    lab, n = ndi.label(alpha > 128)
+    sizes = ndi.sum(np.ones_like(alpha), lab, range(1, n + 1))
+    solid = np.isin(lab, [k + 1 for k, s in enumerate(sizes) if s > sizes.max() * 0.03])
+    keep = ndi.binary_dilation(solid, iterations=3)                 # the anti-aliased rim around the kept parts
+    res = cell.copy()
+    res.putalpha(Image.fromarray((alpha * keep).astype('uint8')))
+    return res, solid
 
 
 def cut(i: int, name: str):
     r, c = divmod(i, cols)
     cell = img.crop((round(c * cw), round(r * ch), round((c + 1) * cw), round((r + 1) * ch)))
+    if HAS_ALPHA:
+        return cut_alpha(cell)
     a = np.asarray(cell).astype(int)
     light = (a.min(axis=2) > 236) & ((a.max(axis=2) - a.min(axis=2)) < 14)
     lab, _ = ndi.label(light)

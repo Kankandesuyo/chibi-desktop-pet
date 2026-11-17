@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PET_STATES } from '../shared/types';
 import { PetStateMachine, STATE_SPECS } from '../src/engine/PetStateMachine';
+import { BehaviorScheduler, type SchedulerContext } from '../src/engine/BehaviorScheduler';
 
 const run = (m: PetStateMachine, seconds: number, dt = 1 / 60): void => {
   for (let t = 0; t < seconds; t += dt) m.update(dt);
@@ -90,5 +91,39 @@ describe('PetStateMachine', () => {
     m.request('happy');
     m.request('happy');
     expect(seen).toEqual(['idle>happy']);
+  });
+});
+
+describe('scenes (eating)', () => {
+  const ctx = (scenes?: SchedulerContext['scenes']): SchedulerContext => ({
+    state: 'idle', autoMove: true, frequency: 1, sleepy: false, idleFor: 0, angry: false, nightTime: false, scenes,
+  });
+  const picks = (scenes?: SchedulerContext['scenes']): Set<string> => {
+    let seed = 1;
+    const s = new BehaviorScheduler(() => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; });
+    const seen = new Set<string>();
+    for (let i = 0; i < 4000; i++) { const a = s.update(1, ctx(scenes)); if (a) seen.add(a); }
+    return seen;
+  };
+
+  it('is only picked at random for characters that have the art', () => {
+    expect(picks().has('eating')).toBe(false);
+    expect(picks(['eating']).has('eating')).toBe(true);
+  });
+
+  it('runs exactly as long as the engine says (whole bites), then returns to idle', () => {
+    const m = new PetStateMachine(() => 0);
+    m.request('eating');
+    m.setDuration(5.6);
+    run(m, 5.5);
+    expect(m.state).toBe('eating');
+    run(m, 0.2);
+    expect(m.state).toBe('idle');
+  });
+
+  it('gives way to being petted or picked up', () => {
+    const m = new PetStateMachine();
+    m.request('eating');
+    expect(m.request('petting')).toBe(true);
   });
 });
