@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: false, aiEnabled: false, launchAtLogin: false, character: 'orange', theme: 'auto', petName: '小橘', personaTraits: '', monologue: 'normal',
   ai: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat', hasApiKey: false },
   agent: {
-    enabled: true, autoApproveMedium: false, readOnly: false, allowedRoots: [], fullDiskAccess: true, toolProtocol: 'auto', maxSteps: 25,
+    enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true, toolProtocol: 'auto', maxSteps: 25,
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
     vision: { baseUrl: '', model: '', hasApiKey: false },
   },

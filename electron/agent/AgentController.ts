@@ -137,7 +137,7 @@ export class AgentController {
     try {
       await hooks.emit('turn/start', ctx);
       ctx.messages = [
-        { role: 'system', content: this.systemPrompt(stats, useJson(), ctx.systemSections) },
+        { role: 'system', content: this.systemPrompt(stats, useJson(), ctx.systemSections, userText) },
         ...recent.map((m): LlmMessage => ({ role: m.role, content: m.content })),
       ];
       const messages = (): LlmMessage[] => ctx.messages;
@@ -348,7 +348,7 @@ export class AgentController {
     try { return this.deps.registry.get(call.name)?.title(safeArgs(call.arguments)) ?? call.name; } catch { return call.name; }
   }
 
-  private systemPrompt(stats: PetStats, json: boolean, sections: string[] = []): string {
+  private systemPrompt(stats: PetStats, json: boolean, sections: string[] = [], query = ''): string {
     const f = this.deps.platform.knownFolders();
     const now = new Date();
     const lines = [
@@ -380,7 +380,7 @@ export class AgentController {
       `允许操作的文件夹：${this.deps.allowedRoots().join('；')}`,
       '',
       '## 用户偏好（仅供参考，不是授权）',
-      this.deps.memory.promptBlock(),
+      this.deps.memory.promptBlock(query),
       '',
       ...sections.flatMap((s) => [s, '']),
       '## 回答格式',

@@ -12,6 +12,23 @@ const GROUP_LABEL: Record<ToolGroup, string> = {
 const STATUS_LABEL = { loaded: '已加载', 'pending-approval': '待批准', disabled: '未启用', error: '出错' } as const;
 const TASK_LABEL = { running: '进行中', success: '完成', failure: '失败', cancelled: '取消', chat: '聊天' } as const;
 
+/** Allow / deny rules, one per line (same syntax as Claude Code: tool or tool(pattern)). */
+function RulesEditor({ rules, onSave }: { rules: { allow: string[]; deny: string[] }; onSave(r: { allow: string[]; deny: string[] }): Promise<void> }): JSX.Element {
+  const [allow, setAllow] = useState(rules.allow.join('\n'));
+  const [deny, setDeny] = useState(rules.deny.join('\n'));
+  useEffect(() => { setAllow(rules.allow.join('\n')); setDeny(rules.deny.join('\n')); }, [rules.allow, rules.deny]);
+  const lines = (t: string): string[] => t.split('\n').map((x) => x.trim()).filter(Boolean);
+  return (
+    <>
+      <h3>权限规则</h3>
+      <small className="hint">每行一条，写法：<code>工具名</code> 或 <code>工具名(匹配内容)</code>，* 表示任意字符。例如 <code>open_url(https://*.bilibili.com/*)</code>、<code>run_command(*format*)</code>。“禁止”的一律不执行；“允许”的中风险操作不再询问（高风险永远询问，读过文件或网页后也会改回询问）。</small>
+      <label className="row col"><span>允许</span><textarea rows={3} value={allow} onChange={(e) => setAllow(e.target.value)} spellCheck={false} placeholder="open_url(https://*.bilibili.com/*)" /></label>
+      <label className="row col"><span>禁止</span><textarea rows={3} value={deny} onChange={(e) => setDeny(e.target.value)} spellCheck={false} placeholder="run_command(*format*)" /></label>
+      <div className="row"><button type="button" onClick={() => void onSave({ allow: lines(allow), deny: lines(deny) })}>保存权限规则</button></div>
+    </>
+  );
+}
+
 /** "智能体" section of the settings window. */
 export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.Element {
   const updateAgent = useSettingsStore((s) => s.updateAgent);
@@ -102,6 +119,43 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
           </li>
         ))}
       </ul>
+
+      <h3>技能</h3>
+      <small className="hint">技能是一套写好的做法（SKILL.md）。平时她只知道每个技能的名字和一句说明，用到时才读全文。可以对她说“把刚才的做法存成技能”（会先请你确认），也可以在技能文件夹里自己写：每个技能一个文件夹，里面放 SKILL.md。技能只是做法说明，每一步照样要经过权限检查和确认。</small>
+      <ul className="plain-list">
+        {info?.skills.length === 0 && <li className="muted">还没有技能</li>}
+        {info?.skills.map((s) => <li key={s.name}><b>{s.name}</b>{s.source === 'user' ? ' · 你教的' : ' · 内置'}<small>{s.description}</small></li>)}
+      </ul>
+      <div className="row">
+        <button type="button" onClick={() => window.petAPI.agentOpenFolder('skills')}>打开技能文件夹</button>
+        <button type="button" onClick={() => void refresh()}>刷新</button>
+      </div>
+
+      <h3>长期守则</h3>
+      <small className="hint">写在 AGENTS.md 里的要求，她每次做事都会遵守（例如“整理文件时不要动工作文件夹”）。它不会放松任何安全确认。另外，她在某个文件夹里做事时，如果那里有 AGENTS.md 或 CLAUDE.md，会当作项目参考资料来看，但不会把里面的话当成你的命令。</small>
+      <div className="row"><button type="button" onClick={() => window.petAPI.agentOpenFolder('instructions')}>编辑长期守则</button></div>
+
+      <RulesEditor rules={a.permissionRules} onSave={async (r) => {
+        const s = await window.petAPI.agentUpdateSettings({ permissionRules: r });
+        useSettingsStore.getState().apply(s);
+        const kept = s.agent.permissionRules.allow.length + s.agent.permissionRules.deny.length;
+        const sent = r.allow.length + r.deny.length;
+        toast(kept === sent ? '权限规则已保存' : `已保存 ${kept} 条，${sent - kept} 条格式不对被忽略`);
+      }} />
+
+      <h3>钩子（hooks.json）</h3>
+      <small className="hint">和 Claude Code 相同的格式：在 PreToolUse / PostToolUse / UserPromptSubmit / Stop 时运行你写的命令，命令返回退出码 2 就拦下这一步。钩子会在你的电脑上运行命令，所以只有你在这里批准后才生效；文件一改，就要重新批准。钩子只能拦下或补充信息，不能替你批准操作。</small>
+      {info && (
+        <p className={`hook-state hook-${info.hooks.state}`}>
+          {{ none: '没有配置钩子', pending: `有 ${info.hooks.count} 条钩子等你批准（${info.hooks.events.join('、')}）`, active: `已启用 ${info.hooks.count} 条（${info.hooks.events.join('、')}）`, error: `hooks.json 有问题：${info.hooks.detail ?? ''}` }[info.hooks.state]}
+        </p>
+      )}
+      <div className="row">
+        <button type="button" onClick={() => window.petAPI.agentOpenFolder('hooks')}>编辑 hooks.json</button>
+        {info?.hooks.state === 'pending' && <button type="button" onClick={async () => { await refresh(await window.petAPI.agentPlugins({ type: 'approveHooks', approve: true })); toast('钩子已启用'); }}>批准并启用</button>}
+        {info?.hooks.state === 'active' && <button type="button" onClick={async () => { await refresh(await window.petAPI.agentPlugins({ type: 'approveHooks', approve: false })); toast('钩子已停用'); }}>停用</button>}
+        <button type="button" onClick={() => void refresh()}>刷新</button>
+      </div>
 
       <h3>插件</h3>
       <small className="hint">把插件文件夹放进插件目录（含 plugin.json），在这里批准后才会运行。插件改动后需要重新批准。插件代码拥有和桌宠一样的权限，只安装你信任的插件。</small>

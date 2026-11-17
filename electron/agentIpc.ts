@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import { dialog, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import type { AgentEvent, AgentInfo, ConfirmDecision } from '../shared/agentTypes';
 import { IPC } from '../shared/constants';
@@ -72,6 +73,8 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
   handle<AgentInfo>(IPC.agentPlugins, async (op) => {
     const o = (op ?? {}) as { type?: string; name?: unknown; approve?: unknown; servers?: unknown };
     if (o.type === 'approve' && typeof o.name === 'string') agent.plugins.approve(o.name, o.approve === true);
+    // Hooks run the user's commands: only a click in the settings window turns the current hooks.json on.
+    if (o.type === 'approveHooks') { agent.userHooks.approve(o.approve === true); return info(); }
     if (o.type === 'setMcp') config.setMcpServers(o.servers);
     if (o.type === 'approve' || o.type === 'setMcp' || o.type === 'reload') { await agent.plugins.reloadAll(); agent.applyGroups(); }
     return info();
@@ -109,6 +112,16 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
   ipcMain.handle(IPC.chatTakeCompose, (e) => (trusted(e) ? windows.takeCompose(e.sender.id) : null));
 
   on(IPC.agentOpenFolder, (_e, kind) => {
+    if (kind === 'instructions') {
+      // Her standing rules: create a short template the first time so there is something to open.
+      if (!fs.existsSync(agent.instructionsFile)) {
+        fs.writeFileSync(agent.instructionsFile, '# 给她的长期守则\n\n在这里写你希望她一直遵守的要求，每条一行。例如：\n\n- 整理文件时不要动“工作”文件夹\n- 回答尽量简短\n', 'utf8');
+      }
+      void shell.openPath(agent.instructionsFile);
+      return;
+    }
+    if (kind === 'hooks') { agent.userHooks.ensureTemplate(); void shell.openPath(agent.userHooks.file); return; }
+    if (kind === 'skills') { fs.mkdirSync(agent.skills.userDir, { recursive: true }); void shell.openPath(agent.skills.userDir); return; }
     const dir = kind === 'plugins' ? agent.plugins.pluginDir : agent.logger.logDir;
     void shell.openPath(dir);
   });

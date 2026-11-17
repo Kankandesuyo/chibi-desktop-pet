@@ -113,6 +113,8 @@ export interface AgentServices {
   vision: (pngPath: string, question: string, signal: AbortSignal, options?: { json?: boolean }) => Promise<string>;
   /** Shows the user a spot on the primary screen (highlight ring + the pet walks over). Absent in tests / headless. */
   pointAt?: (target: ScreenTarget) => void;
+  /** Built-in and user skills (load_skill / save_skill). */
+  skills?: import('./Skills').SkillLibrary;
 }
 
 /** A spot on the primary display, as fractions of its width and height (0–1), with a short name. */

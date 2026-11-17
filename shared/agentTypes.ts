@@ -14,6 +14,11 @@ export interface AgentSettings {
   autoApproveMedium: boolean;
   /** Read-only mode: only tools that just look may run (she can investigate and plan, not change anything). */
   readOnly: boolean;
+  /**
+   * Rules like Claude Code's, e.g. "open_url(https://*.bilibili.com/*)". deny = never run;
+   * allow = medium-risk calls run without asking (high risk always asks).
+   */
+  permissionRules: { allow: string[]; deny: string[] };
   /** Extra folders the agent may work in, on top of the user's standard folders. */
   allowedRoots: string[];
   /** Every drive is reachable; system folders become high-risk (ask every time) instead of off-limits. */
@@ -105,7 +110,23 @@ export interface McpServerConfig {
   risk: 'medium' | 'high';
 }
 
+export interface SkillSummary { name: string; description: string; source: 'builtin' | 'user' }
+
+/** User hooks (hooks.json): none = nothing configured; pending = changed, waiting for approval. */
+export interface HooksStatus {
+  file: string;
+  state: 'none' | 'pending' | 'active' | 'error';
+  count: number;
+  events: string[];
+  detail?: string;
+}
+
 export interface AgentInfo {
+  skills: SkillSummary[];
+  skillDir: string;
+  hooks: HooksStatus;
+  /** The user's global instructions file (AGENTS.md in the agent data folder). */
+  instructionsFile: string;
   tools: ToolInfo[];
   plugins: PluginInfo[];
   mcpServers: McpServerConfig[];

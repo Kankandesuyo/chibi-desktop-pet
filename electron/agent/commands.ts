@@ -4,6 +4,9 @@ import type { AgentController } from './AgentController';
 import type { SessionStore, TurnRecord } from './SessionStore';
 import type { TaskRecaps } from './TaskRecap';
 import type { ToolRegistry } from './ToolRegistry';
+import type { PermissionRules } from './permissionRules';
+import type { SkillLibrary } from './Skills';
+import type { UserHooks } from './UserHooks';
 
 /**
  * Chat slash commands: handled right here, without a model turn (after Claude Code's / dsh's commands).
@@ -15,6 +18,9 @@ export interface CommandDeps {
   sessions: SessionStore;
   recaps: TaskRecaps;
   registry: ToolRegistry;
+  skills?: SkillLibrary;
+  userHooks?: UserHooks;
+  rules?(): PermissionRules | undefined;
 }
 
 interface Command { names: string[]; help: string; run(args: string, d: CommandDeps): AgentCommandResult }
@@ -73,6 +79,39 @@ const COMMANDS: Command[] = [
       const byGroup = new Map<string, string[]>();
       for (const t of tools) byGroup.set(t.group, [...(byGroup.get(t.group) ?? []), t.name]);
       return { reply: [`可用工具 ${tools.length} 个：`, ...[...byGroup].map(([g, names]) => `· ${g}（${names.length}）：${names.join('、')}`)].join('\n') };
+    },
+  },
+  {
+    names: ['skills', '技能'], help: '看看她会哪些技能',
+    run: (_a, d) => {
+      const list = d.skills?.list() ?? [];
+      if (!list.length) return { reply: '还没有技能。可以让她“把刚才的做法存成技能”，或者在 设置 → 智能体 → 技能 里打开技能文件夹自己写。' };
+      return { reply: [`她会 ${list.length} 个技能：`, ...list.map((s) => `· ${s.name}${s.source === 'user' ? '（你教的）' : ''}：${s.description}`)].join('\n') };
+    },
+  },
+  {
+    names: ['permissions', '权限'], help: '看看权限规则',
+    run: (_a, d) => {
+      const r = d.rules?.() ?? { allow: [], deny: [] };
+      const list = (rules: string[]): string => rules.map((x) => `  ${x}`).join('\n');
+      return {
+        reply: [
+          '高风险操作永远逐次确认；只读模式、自动允许中风险在聊天框左下角切换。',
+          r.allow.length ? `允许（中风险不再询问）：\n${list(r.allow)}` : '允许规则：无',
+          r.deny.length ? `禁止：\n${list(r.deny)}` : '禁止规则：无',
+          '规则在 设置 → 智能体 → 权限规则 里修改。',
+        ].join('\n'),
+      };
+    },
+  },
+  {
+    names: ['hooks', '钩子'], help: '看看钩子状态',
+    run: (_a, d) => {
+      if (!d.userHooks) return { reply: '钩子功能不可用。' };
+      d.userHooks.reload();
+      const s = d.userHooks.status();
+      const state = { none: '没有配置', pending: '有改动，等你在设置里批准后才会生效', active: '已启用', error: `出错：${s.detail ?? ''}` }[s.state];
+      return { reply: [`钩子：${state}${s.count ? `（${s.count} 条：${s.events.join('、')}）` : ''}`, `文件：${s.file}`].join('\n') };
     },
   },
 ];

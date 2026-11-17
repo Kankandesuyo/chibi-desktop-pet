@@ -45,6 +45,7 @@
     "files": [
       "dist/**",
       "dist-electron/**",
+      "skills/**",
       "remote-chat/*.cjs",
       "!remote-chat/*.test.cjs",
       "remote-chat/computer-use/*.cjs",

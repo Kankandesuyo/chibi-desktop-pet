@@ -146,8 +146,8 @@ export interface PetAPI {
   agentUpdateSettings(patch: AgentSettingsPatch): Promise<Settings>;
   agentMemory(op: { type: 'update'; id: string; text: string } | { type: 'delete'; id: string }): Promise<AgentInfo>;
   agentPickFolder(): Promise<string | null>;
-  agentPlugins(op: { type: 'approve'; name: string; approve: boolean } | { type: 'reload' } | { type: 'setMcp'; servers: McpServerConfig[] }): Promise<AgentInfo>;
-  agentOpenFolder(kind: 'logs' | 'plugins'): void;
+  agentPlugins(op: { type: 'approve'; name: string; approve: boolean } | { type: 'approveHooks'; approve: boolean } | { type: 'reload' } | { type: 'setMcp'; servers: McpServerConfig[] }): Promise<AgentInfo>;
+  agentOpenFolder(kind: 'logs' | 'plugins' | 'skills' | 'instructions' | 'hooks'): void;
   /** A chat slash command; null when the text is not one (send it as a message instead). */
   agentCommand(text: string): Promise<AgentCommandResult | null>;
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;

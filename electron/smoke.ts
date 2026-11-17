@@ -117,12 +117,12 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
       { text: '建好啦，就在桌面上！[[emotion:happy|action:wave]]' },
     ];
     let n = 0;
-    const requests: { tools: number; roles: string[]; persona: boolean }[] = [];
+    const requests: { tools: number; roles: string[]; persona: boolean; skills: boolean }[] = [];
     const server = http.createServer((req, res) => {
       let raw = ''; req.on('data', (c) => { raw += c; });
       req.on('end', () => {
         const body = JSON.parse(raw) as { tools?: unknown[]; messages: { role: string; content?: unknown }[] };
-        requests.push({ tools: body.tools?.length ?? 0, roles: body.messages.map((m) => m.role), persona: String(body.messages[0]?.content ?? '').includes('你叫「') });
+        requests.push({ tools: body.tools?.length ?? 0, roles: body.messages.map((m) => m.role), persona: String(body.messages[0]?.content ?? '').includes('你叫「'), skills: String(body.messages[0]?.content ?? '').includes('- 整理文件夹：') });
         const t = turns[Math.min(n++, turns.length - 1)] as { tool?: [string, unknown]; text?: string };
         const chunks: unknown[] = [];
         if (t.text) chunks.push({ choices: [{ delta: { content: t.text } }] });
@@ -263,7 +263,10 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
       await sleep(300);
       fs.writeFileSync(path.join(dir, '14_agent_settings.png'), (await settingsWin.webContents.capturePage()).toPNG());
       const text = (await settingsWin.webContents.executeJavaScript('document.body.innerText')) as string;
-      log.push({ step: '14_settings', hasPersonaSection: text.includes('她自己') && text.includes('自言自语'), hasAgentSection: text.includes('智能体'), memoryShown: text.includes('记忆'), tasksShown: text.includes('建一个叫') });
+      await settingsWin.webContents.executeJavaScript('[...document.querySelectorAll("h3")].find((h) => h.textContent === "技能")?.scrollIntoView(); "ok"');
+      await sleep(300);
+      fs.writeFileSync(path.join(dir, '14b_skills_rules_hooks.png'), (await settingsWin.webContents.capturePage()).toPNG());
+      log.push({ step: '14_settings', hasPersonaSection: text.includes('她自己') && text.includes('自言自语'), hasAgentSection: text.includes('智能体'), memoryShown: text.includes('记忆'), tasksShown: text.includes('建一个叫'), phase3: { skills: text.includes('打开技能文件夹') && text.includes('照片按日期归档'), rules: text.includes('保存权限规则'), hooks: text.includes('没有配置钩子'), instructions: text.includes('编辑长期守则') } });
       // Theme: switching in settings recolours every window at once; "auto" follows the character.
       const accent = (w: BrowserWindow): Promise<string> => w.webContents.executeJavaScript('document.documentElement.dataset.theme + " " + getComputedStyle(document.documentElement).getPropertyValue("--orange").trim()') as Promise<string>;
       const themeBefore = [await accent(settingsWin), await accent(chat)];

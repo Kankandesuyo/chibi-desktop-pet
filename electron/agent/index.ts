@@ -25,6 +25,11 @@ import { TaskRecaps } from './TaskRecap';
 import { TurnHooks } from './TurnHooks';
 import { compactionPlugin, readOnlyPlugin, recapPlugin, replayRecaps, sessionLogPlugin } from './turnPlugins';
 import { runCommand } from './commands';
+import { instructionsPlugin, permissionRulesPlugin, skillsPlugin, userHooksPlugin } from './extensionPlugins';
+import { firstMatch } from './permissionRules';
+import { SkillLibrary } from './Skills';
+import { skillTools } from './tools/skillTools';
+import { UserHooks } from './UserHooks';
 
 /**
  * Built-in tools that only look (no side effects, never ask the user), so several in one step may run
@@ -33,7 +38,7 @@ import { runCommand } from './commands';
 const CONCURRENCY_SAFE = new Set([
   'get_known_folders', 'get_system_info', 'list_directory', 'search_files', 'get_file_info',
   'list_running_apps', 'find_installed_app', 'list_installed_software', 'winget_search', 'registry_read',
-  'project_tree', 'git_status', 'list_dev_servers', 'list_memories', 'get_active_window', 'list_windows',
+  'project_tree', 'git_status', 'list_dev_servers', 'list_memories', 'get_active_window', 'list_windows', 'load_skill',
 ]);
 
 export interface AgentRuntimeOptions {
@@ -52,6 +57,8 @@ export interface AgentRuntimeOptions {
   mcpServers(): McpServerConfig[];
   /** Persona block shared with plain chat. */
   persona?(): string;
+  /** Skills that ship with the app (folder of <name>/SKILL.md). */
+  builtinSkillsDir?: string;
 }
 
 export type AgentRuntime = ReturnType<typeof createAgentRuntime>;
@@ -64,7 +71,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   refreshSecrets();
 
   const registry = new ToolRegistry();
-  const builtins = [updatePlanTool, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools];
+  const builtins = [updatePlanTool, ...skillTools, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools];
   for (const t of builtins) if (CONCURRENCY_SAFE.has(t.name)) t.concurrencySafe = true;
   registry.registerAll(builtins);
 
@@ -84,7 +91,10 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
 
   let controller: AgentController | null = null;
   const permissions = new PermissionManager(
-    () => ({ allowedRoots: allowedRoots(), protectedRoots: protectedRoots(), systemZones: systemZones(), autoApproveMedium: o.settings().autoApproveMedium }),
+    () => ({
+      allowedRoots: allowedRoots(), protectedRoots: protectedRoots(), systemZones: systemZones(), autoApproveMedium: o.settings().autoApproveMedium,
+      allowRule: (tool, args) => firstMatch(o.settings().permissionRules?.allow ?? [], tool, args),
+    }),
     (req, signal) => (controller ? controller.confirm(req, signal) : Promise.resolve('deny')),
   );
   const logger = new TaskLogger(o.baseDir, redactor);
@@ -93,7 +103,8 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   const journal = new FileJournal(o.baseDir);
   const processes = new ProcessManager();
   const browser = new BrowserSession(o.browser);
-  const services: AgentServices = { memory, planner, journal, processes, browser, vision: o.vision, ...(o.pointAt ? { pointAt: o.pointAt } : {}) };
+  const skills = new SkillLibrary(o.builtinSkillsDir ?? null, path.join(o.baseDir, 'skills'));
+  const services: AgentServices = { memory, planner, journal, processes, browser, skills, vision: o.vision, ...(o.pointAt ? { pointAt: o.pointAt } : {}) };
   const executor = new ToolExecutor(registry, permissions, new TaskVerifier(), logger, redactor, o.platform, services);
   const redact = (s: string): string => redactor.text(s);
   const hooks = new TurnHooks();
@@ -110,19 +121,32 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   recapPlugin(hooks, recaps, sessions);
   compactionPlugin(hooks, () => ctl.compactOptions, logger, sessions);
   readOnlyPlugin(hooks, registry, () => o.settings().readOnly === true);
+  // Phase 3: skills, instruction files, permission rules, the user's own hooks.
+  const instructionsFile = path.join(o.baseDir, 'AGENTS.md');
+  const userHooks = new UserHooks(o.baseDir, o.approvals, (event, data) => logger.log('hooks', event, data));
+  skillsPlugin(hooks, skills);
+  instructionsPlugin(hooks, {
+    globalFile: instructionsFile,
+    resolvePath: (p) => permissions.resolvePath(p, o.platform.knownFolders().home),
+    canRead: (file) => permissions.checkPaths({ read: [file] }).ok,
+  });
+  permissionRulesPlugin(hooks, () => o.settings().permissionRules ?? { allow: [], deny: [] });
+  userHooksPlugin(hooks, userHooks, () => sessions.id);
   const plugins = new ToolPluginManager(registry, path.join(o.baseDir, 'plugins'), o.approvals, o.mcpServers);
   const applyGroups = (): void => registry.setEnabledGroups(o.settings().toolGroups);
   applyGroups();
 
   return {
-    controller, registry, permissions, logger, memory, planner, journal, processes, browser, plugins, redactor, hooks, sessions, recaps,
+    controller, registry, permissions, logger, memory, planner, journal, processes, browser, plugins, redactor, hooks, sessions, recaps, skills, userHooks, instructionsFile,
     platform: o.platform,
     /** A chat slash command (/help, /resume…); null when the text is not one. */
-    command: (text: string) => runCommand(text, { controller: ctl, sessions, recaps, registry }),
+    command: (text: string) => runCommand(text, { controller: ctl, sessions, recaps, registry, skills, userHooks, rules: () => o.settings().permissionRules }),
     allowedRoots, applyGroups, refreshSecrets,
     info(): AgentInfo {
       const f = o.platform.knownFolders();
       return {
+        skills: skills.list().map(({ name, description, source }) => ({ name, description, source })), skillDir: skills.userDir,
+        hooks: (userHooks.reload(), userHooks.status()), instructionsFile,
         tools: registry.info(), plugins: plugins.info(), mcpServers: o.mcpServers(), memories: memory.list(),
         recentTasks: logger.recentTasks(), defaultRoots: [f.desktop, f.documents, f.downloads, f.pictures, f.music, f.videos],
         logDir: logger.logDir, pluginDir: plugins.pluginDir,

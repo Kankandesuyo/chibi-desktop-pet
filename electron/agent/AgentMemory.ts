@@ -4,6 +4,19 @@ import type { MemoryItem } from '../../shared/agentTypes';
 
 const MAX_ITEMS = 200;
 const MAX_TEXT = 300;
+/** Up to this many memories all go into the prompt; above it, only relevant + recent ones. */
+const ALL_UNDER = 30;
+const PICK = 20;
+const RECENT = 5;
+
+/** Overlapping character pairs (works for Chinese without a tokenizer; lower-cased for English). */
+function bigrams(s: string): Set<string> {
+  const t = s.toLowerCase().replace(/\s+/g, '');
+  const out = new Set<string>();
+  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2));
+  return out;
+}
+const overlap = (a: Set<string>, b: Set<string>): number => { let n = 0; for (const x of a) if (b.has(x)) n++; return n; };
 
 /**
  * Preferences the user explicitly asked to keep (favourite editor, project folders…).
@@ -56,10 +69,24 @@ export class AgentMemory {
     return true;
   }
 
-  /** Text for the system prompt. */
-  promptBlock(): string {
+  /**
+   * Text for the system prompt. With many memories only the relevant ones go in: those sharing the most
+   * character pairs with the request, plus the most recent few (so a fresh preference is never lost).
+   */
+  promptBlock(query = ''): string {
     if (this.items.length === 0) return '（暂无）';
-    return this.items.map((m) => `- [${m.id}] (${m.category}) ${m.text}`).join('\n');
+    const line = (m: MemoryItem): string => `- [${m.id}] (${m.category}) ${m.text}`;
+    if (this.items.length <= ALL_UNDER) return this.items.map(line).join('\n');
+    const q = bigrams(query);
+    const recent = new Set(this.items.slice(-RECENT).map((m) => m.id));
+    const scored = this.items
+      .map((m, i) => ({ m, i, score: recent.has(m.id) ? Infinity : overlap(q, bigrams(`${m.category} ${m.text}`)) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || b.i - a.i)
+      .slice(0, PICK)
+      .sort((a, b) => a.i - b.i);
+    const left = this.items.length - scored.length;
+    return [...scored.map((x) => line(x.m)), `（另有 ${left} 条和这次请求关系不大的记忆没有列出；需要时可以用 list_memories 查看全部）`].join('\n');
   }
 
   private save(): void {

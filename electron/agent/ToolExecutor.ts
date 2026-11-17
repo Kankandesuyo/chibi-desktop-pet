@@ -102,7 +102,7 @@ export class ToolExecutor {
     const auth = await this.permissions.authorize({
       taskId: rt.taskId, tool: tool.name, title, baseRisk: tool.riskLevel, assessed: assessment.risk,
       alwaysConfirm: tool.requiresConfirmation, reason: assessment.reason,
-      preview: assessment.preview ?? previewArgs(args), tainted: rt.tainted, signal: rt.signal,
+      preview: assessment.preview ?? previewArgs(args), tainted: rt.tainted, signal: rt.signal, args,
     });
     this.logger.log(rt.taskId, 'permission', { tool: tool.name, args, risk, allowed: auth.allowed, how: auth.allowed ? auth.how : auth.reason });
     if (!auth.allowed) return fail('denied', auth.reason, risk, title);

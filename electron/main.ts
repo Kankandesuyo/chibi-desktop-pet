@@ -127,6 +127,7 @@ if (!app.requestSingleInstanceLock()) {
       approvals: { get: () => config.getPluginApprovals(), set: (n, h) => config.setPluginApproval(n, h) },
       mcpServers: () => config.getMcpServers(),
       persona,
+      builtinSkillsDir: path.join(app.getAppPath(), 'skills'),
     });
     registerAgentHandlers(config, windows, agent, applySettings, life);
     // Remote web chat, the shared desktop/web conversation and Computer Use (remote-chat/, packaged with the app).

@@ -129,7 +129,7 @@ export function lastToolResult(messages: LlmMessage[]): Record<string, unknown> 
 }
 
 export const DEFAULT_SETTINGS: AgentSettings = {
-  enabled: true, autoApproveMedium: false, readOnly: false, allowedRoots: [], fullDiskAccess: false,
+  enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: false,
   toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as AgentSettings['toolGroups'],
   toolProtocol: 'native', maxSteps: 20, vision: { baseUrl: '', model: '', hasApiKey: false },
 };
@@ -149,7 +149,7 @@ export interface Harness {
 
 export interface RunResult { events: AgentEvent[]; pet: AgentPetSignal[]; confirms: ConfirmRequest[]; done?: Extract<AgentEvent, { type: 'done' }>; error?: string }
 
-export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platform?: FakePlatform; settings?: Partial<AgentSettings>; secrets?: string[]; persona?: () => string; vision?: (question: string) => Promise<string>; pointAt?: AgentRuntimeOptions['pointAt'] } = {}): Harness {
+export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platform?: FakePlatform; settings?: Partial<AgentSettings>; secrets?: string[]; persona?: () => string; vision?: (question: string) => Promise<string>; pointAt?: AgentRuntimeOptions['pointAt']; builtinSkillsDir?: string } = {}): Harness {
   const platform = opts.platform ?? new FakePlatform();
   const baseDir = opts.baseDir ?? path.join(platform.root, 'agent-data');
   const llm = new ScriptedLlm(steps);
@@ -165,6 +165,7 @@ export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platfo
     approvals: { get: () => approvals, set: (n, h) => { if (h) approvals[n] = h; else delete approvals[n]; } },
     mcpServers: () => mcp,
     persona: opts.persona,
+    ...(opts.builtinSkillsDir ? { builtinSkillsDir: opts.builtinSkillsDir } : {}),
   });
   let seq = 0;
   return {

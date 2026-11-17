@@ -12,6 +12,8 @@ export interface PermissionPolicy {
   /** Allowed, but every change inside is high risk (system folders when full disk access is on). */
   systemZones: string[];
   autoApproveMedium: boolean;
+  /** The user's allow rule matching this call, if any (medium risk only; see permissionRules.ts). */
+  allowRule?(tool: string, args: unknown): string | null;
 }
 
 export type Confirmer = (req: Omit<ConfirmRequest, 'confirmId'>, signal: AbortSignal) => Promise<ConfirmDecision>;
@@ -28,10 +30,12 @@ export interface AuthorizeInput {
   /** The task has already read external content (files, web pages, program output). */
   tainted: boolean;
   signal: AbortSignal;
+  /** The call's arguments (for the user's allow rules). */
+  args?: unknown;
 }
 
 export type AuthorizeResult =
-  | { allowed: true; risk: RiskLevel; how: 'auto' | 'confirmed' | 'task-grant' }
+  | { allowed: true; risk: RiskLevel; how: 'auto' | 'confirmed' | 'task-grant' | 'rule'; rule?: string }
   | { allowed: false; risk: RiskLevel; reason: string };
 
 const ORDER: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
@@ -110,6 +114,11 @@ export class PermissionManager {
     const risk = maxRisk(input.baseRisk, input.assessed);
     const grants = this.taskGrants.get(input.taskId);
     let needConfirm = input.alwaysConfirm || risk === 'high';
+    // A user's allow rule covers medium risk only, and (like auto-approve) not after reading external content.
+    if (!needConfirm && risk === 'medium' && !input.tainted) {
+      const rule = this.policy().allowRule?.(input.tool, input.args) ?? null;
+      if (rule) return { allowed: true, risk, how: 'rule', rule };
+    }
     if (!needConfirm && risk === 'medium') {
       const auto = this.policy().autoApproveMedium && !input.tainted;
       needConfirm = !auto && !grants?.has(input.tool);

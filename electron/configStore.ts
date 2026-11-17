@@ -4,6 +4,7 @@ import { app, safeStorage } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SIZE_MAX, SIZE_MIN } from '../shared/constants';
+import { sanitizeRules } from './agent/permissionRules';
 import { TOOL_GROUPS, type AgentSettings, type McpServerConfig, type ToolGroup } from '../shared/agentTypes';
 import { EMOTIONS, type AgentSettingsPatch, type ChatMessage, type Emotion, type PetStats, type Point, type Settings } from '../shared/types';
 
@@ -31,7 +32,7 @@ interface StoredConfig {
 
 const DEFAULT_AGENT: StoredAgent = {
   settings: {
-    enabled: true, autoApproveMedium: false, readOnly: false, allowedRoots: [], fullDiskAccess: true,
+    enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true,
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
     toolProtocol: 'auto', maxSteps: 25, vision: { baseUrl: '', model: '' },
   },
@@ -94,6 +95,7 @@ export function sanitizeAgentSettings(input: unknown, base: StoredAgentSettings)
     enabled: bool(s.enabled, base.enabled),
     autoApproveMedium: bool(s.autoApproveMedium, base.autoApproveMedium),
     readOnly: bool(s.readOnly, base.readOnly),
+    permissionRules: s.permissionRules === undefined ? base.permissionRules : sanitizeRules(s.permissionRules),
     fullDiskAccess: bool(s.fullDiskAccess, base.fullDiskAccess),
     allowedRoots: [...new Set(roots.filter((r): r is string => typeof r === 'string' && path.isAbsolute(r)).map((r) => r.slice(0, 500)))].slice(0, 30),
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, bool(groups[g], base.toolGroups[g])])) as Record<ToolGroup, boolean>,

@@ -51,6 +51,13 @@ body[data-view="settings"] { background: var(--cream); overflow-y: auto; }
 .row input[type="range"] { flex: 1; accent-color: var(--orange); }
 .row input[type="checkbox"] { margin-left: auto; width: 18px; height: 18px; accent-color: var(--orange); }
 .row input[type="text"], .row input[type="password"] { padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+.row textarea { padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; font: 12.5px/1.5 "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace; resize: vertical; }
+.row textarea::placeholder { color: var(--ink); opacity: 0.35; }
+.settings code { padding: 0 4px; border-radius: 4px; background: rgba(var(--accent-rgb), 0.1); font-size: 12px; }
+.hook-state { margin: 4px 0; padding: 6px 10px; border-radius: 8px; font-size: 13px; background: rgba(0, 0, 0, 0.04); }
+.hook-state.hook-pending { background: #fff3d6; color: #8a5a00; }
+.hook-state.hook-active { background: #dff0e5; color: #1e6b3e; }
+.hook-state.hook-error { background: #f8d7d3; color: #a5281b; }
 .row .value { flex: 0 0 44px; text-align: right; font-variant-numeric: tabular-nums; }
 .row small { display: block; opacity: 0.7; font-size: 12px; line-height: 1.5; }
 .row.buttons { flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
