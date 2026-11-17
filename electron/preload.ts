@@ -15,6 +15,8 @@ const C = {
   agentRun: 'agent:run', agentAbort: 'agent:abort', agentConfirm: 'agent:confirm', agentInfo: 'agent:info',
   agentUpdateSettings: 'agent:update-settings', agentMemory: 'agent:memory', agentPickFolder: 'agent:pick-folder',
   agentPlugins: 'agent:plugins', agentOpenFolder: 'agent:open-folder', agentEvent: 'evt:agent',
+  charactersList: 'characters:list', charactersOpenFolder: 'characters:open-folder', charactersReloadPet: 'characters:reload-pet',
+  charactersCreate: 'characters:create',
 } as const;
 
 function listen<T>(channel: string) {
@@ -56,6 +58,10 @@ const api: PetAPI = {
   agentPlugins: (op) => ipcRenderer.invoke(C.agentPlugins, op),
   agentOpenFolder: (kind) => ipcRenderer.send(C.agentOpenFolder, kind),
   onAgentEvent: listen(C.agentEvent),
+  listCharacters: () => ipcRenderer.invoke(C.charactersList),
+  openCharactersFolder: () => ipcRenderer.send(C.charactersOpenFolder),
+  reloadPet: () => ipcRenderer.send(C.charactersReloadPet),
+  createCharacter: (name, manifest, files) => ipcRenderer.invoke(C.charactersCreate, name, manifest, files),
   onPlacement: listen(C.placement),
   onDragUpdate: listen(C.dragUpdate),
   onSettings: listen(C.settings),

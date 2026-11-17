@@ -11,3 +11,9 @@ test('character settings fall back for old configs and only accept packaged char
   assert.equal(characterId('missing'), 'orange');
   assert.notEqual(catalog.deepseek.image, catalog.orange.image);
 });
+test('saving from the web keeps a custom character chosen on the desktop', () => {
+  const config = { getSettings: () => ({ petName: 'test', character: 'custom:我的角色' }), getAgentSettings: () => ({}), getAiEndpoint: () => ({}), getApiKey: () => '' };
+  assert.equal(readSettings(config).character, 'orange');
+  assert.equal(Object.hasOwn(validateSettings({ character: 'orange', petName: '新名字' }, config).basic, 'character'), false);
+  assert.equal(validateSettings({ character: 'deepseek' }, config).basic.character, 'deepseek');
+});

@@ -36,6 +36,12 @@ npm run dist       # 生成 Windows 安装包（必须在 Windows 上执行）
 
 角色以外的透明区域不拦截鼠标，可以正常点到后面的窗口。
 
+## 换成自己的形象
+
+不用改代码、不用重新打包：设置 → 她自己 → 角色，点 **用当前角色做模板**，
+把生成的文件夹里的图片换成你自己的，再点 **重新载入形象**。
+详见 [自定义角色说明](docs/CUSTOM_CHARACTERS.md)。
+
 ## 让她帮你做事（智能体模式）
 
 在聊天框直接说需求，例如“在桌面建一个叫 AI项目 的文件夹”“打开 VS Code”“把桌面的图片放到图片文件夹”。
@@ -81,9 +87,18 @@ docs/                素材文档、状态机说明、验证清单
 
 ## 文档
 
+- [换成自己的形象（自定义角色）](docs/CUSTOM_CHARACTERS.md)
 - [素材命名与管理](docs/ASSETS.md)
 - [动画状态机说明](docs/STATE_MACHINE.md)
 - [智能体架构、工具、权限、插件](docs/AGENT.md)
 - [已验证 / 未验证功能清单（含 Windows 手动测试步骤）](docs/VERIFICATION.md)
 
-设置和数据保存在 `%APPDATA%\Chibi Desktop Pet\config.json`（开发模式是 `%APPDATA%\chibi-desktop-pet`）。
+设置和数据保存在 `%APPDATA%\chibi-desktop-pet\`（`config.json`、自定义角色文件夹 `characters\` 等）。
+
+## 许可证
+
+代码以 [MIT 许可证](LICENSE) 发布：可以自由使用、修改、再发布，保留版权声明即可。
+
+内置角色立绘随仓库提供，供学习和个人使用。其中「DeepSeek / 鲸鱼女仆」是同人形象，
+DeepSeek 名称和相关标识属于其权利人，本项目与其无关联；再发布时请自行确认素材授权，
+或换成你自己的角色（见上文）。

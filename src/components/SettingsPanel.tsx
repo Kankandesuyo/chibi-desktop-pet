@@ -4,7 +4,79 @@ import type { Settings } from '../../shared/types';
 import { useSettingsStore } from '../store/settingsStore';
 import { AgentSettingsPanel } from './AgentSettingsPanel';
 import type { MonologueLevel } from '../../shared/persona';
-import { CHARACTER_IDS, CHARACTERS, THEME_IDS, THEME_LABELS, type CharacterId, type ThemeChoice } from '../../shared/characters';
+import {
+  CHARACTER_IDS, CHARACTERS, characterMeta, THEME_IDS, THEME_LABELS,
+  type CharacterId, type CustomCharacterInfo, type ThemeChoice,
+} from '../../shared/characters';
+import { resolveCharacterArt } from '../config/characters';
+
+/** Copies the current character (manifest + every picture) into a new folder the user can edit. */
+async function copyAsTemplate(character: CharacterId, custom: readonly CustomCharacterInfo[], name: string): Promise<{ id?: CharacterId; error?: string }> {
+  const art = resolveCharacterArt(character, custom);
+  const meta = characterMeta(art.character, custom);
+  const files = await Promise.all([...art.urlByFile].map(async ([file, url]) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`读取 ${file} 失败`);
+    return { name: file, data: new Uint8Array(await res.arrayBuffer()) };
+  }));
+  const manifest = { ...structuredClone(art.manifest), label: name, appearance: meta.appearance, theme: meta.theme };
+  delete (manifest as Record<string, unknown>).icon;              // the icon of a built-in character is not in its folder
+  return window.petAPI.createCharacter(name, manifest, files);
+}
+
+/** Character picker: built-in characters plus the user's own folders, and the tools to make one. */
+function CharacterSection(props: { settings: Settings }): JSX.Element {
+  const update = useSettingsStore((s) => s.update);
+  const current = props.settings.character;
+  const [custom, setCustom] = useState<CustomCharacterInfo[]>([]);
+  const [newName, setNewName] = useState('我的角色');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const refresh = async (): Promise<CustomCharacterInfo[]> => { const list = await window.petAPI.listCharacters(); setCustom(list); return list; };
+  useEffect(() => { void refresh(); }, []);
+  const meta = characterMeta(current, custom);
+  const listed = custom.some((c) => c.id === current) || CHARACTER_IDS.some((id) => id === current);
+  const broken = custom.filter((c) => c.error);
+
+  const makeTemplate = async (): Promise<void> => {
+    setBusy(true); setMessage('');
+    try {
+      const r = await copyAsTemplate(current, custom, newName.trim());
+      if (r.error || !r.id) { setMessage(r.error ?? '创建失败'); return; }
+      await refresh();
+      await update({ character: r.id });
+      setMessage('已创建并切换。点「打开角色文件夹」替换里面的图片，再点「重新载入形象」。');
+      window.petAPI.openCharactersFolder();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : '创建失败');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <label className="row"><span>角色</span>
+        <select value={current} onChange={(e) => void update({ character: e.target.value as CharacterId })}>
+          {CHARACTER_IDS.map((id) => <option key={id} value={id}>{CHARACTERS[id].label}</option>)}
+          {custom.filter((c) => !c.error).map((c) => <option key={c.id} value={c.id}>{c.label}（自定义）</option>)}
+          {!listed && <option value={current}>{meta.label}（找不到）</option>}
+        </select>
+      </label>
+      {meta.note && <div className="row"><small>{meta.note}</small></div>}
+      <div className="row buttons">
+        <button type="button" onClick={() => window.petAPI.openCharactersFolder()}>打开角色文件夹</button>
+        <button type="button" onClick={() => void refresh().then((l) => setMessage(`找到 ${l.filter((c) => !c.error).length} 个自定义角色`))}>刷新列表</button>
+        <button type="button" onClick={() => window.petAPI.reloadPet()}>重新载入形象</button>
+      </div>
+      <div className="row buttons">
+        <input type="text" maxLength={40} value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="新角色名字" />
+        <button type="button" disabled={busy || !newName.trim()} onClick={() => void makeTemplate()}>{busy ? '复制中…' : '用当前角色做模板'}</button>
+      </div>
+      <div className="row"><small>想换成自己的形象：先用当前角色做一个模板，把文件夹里的图片换成你的（文件名不变），再点「重新载入形象」。</small></div>
+      {broken.map((c) => <div key={c.id} className="row"><small>「{c.folder}」不能用：{c.error}</small></div>)}
+      {message && <div className="row"><small>{message}</small></div>}
+    </>
+  );
+}
 
 const MONOLOGUE_LABELS: Record<MonologueLevel, string> = { off: '关闭', rare: '偶尔', normal: '适中', often: '经常' };
 
@@ -22,17 +94,12 @@ function PersonaSection(props: { settings: Settings }): JSX.Element {
   return (
     <>
       <h2>她自己</h2>
-      <label className="row"><span>角色</span>
-        <select value={props.settings.character} onChange={(e) => void update({ character: e.target.value as CharacterId })}>
-          {CHARACTER_IDS.map((id) => <option key={id} value={id}>{CHARACTERS[id].label}</option>)}
-        </select>
-      </label>
+      <CharacterSection settings={props.settings} />
       <label className="row"><span>界面颜色</span>
         <select value={props.settings.theme} onChange={(e) => void update({ theme: e.target.value as ThemeChoice })}>
           {(['auto', ...THEME_IDS] as ThemeChoice[]).map((t) => <option key={t} value={t}>{THEME_LABELS[t]}</option>)}
         </select>
       </label>
-      {CHARACTERS[props.settings.character].note && <div className="row"><small>{CHARACTERS[props.settings.character].note}</small></div>}
       <label className="row col"><span>名字</span>
         <input type="text" maxLength={12} value={name} onChange={(e) => setName(e.target.value)} placeholder="小橘" />
       </label>

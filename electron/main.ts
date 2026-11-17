@@ -7,7 +7,8 @@ import { describeImage, OpenAiCompatibleClient } from './agent/llm';
 import { createElectronPlatform } from './agent/platform/electronPlatform';
 import { registerAgentHandlers } from './agentIpc';
 import { buildMonologuePrompt, buildPersona } from '../shared/persona';
-import { CHARACTERS, type CharacterId } from '../shared/characters';
+import { CHARACTERS, characterMeta, isBuiltinCharacter, type CharacterId } from '../shared/characters';
+import { CustomCharacters, parseUserCharacterPath } from './customCharacters';
 import { IPC } from '../shared/constants';
 import { completeOnce } from './aiClient';
 import { ConfigStore } from './configStore';
@@ -25,19 +26,33 @@ protocol.registerSchemesAsPrivileged([
 let tray: Tray | null = null;
 let quitting = false;
 
-function registerAppProtocol(): void {
+function registerAppProtocol(characters: CustomCharacters): void {
   const root = path.join(app.getAppPath(), 'dist');
   protocol.handle('app', (request) => {
     const url = new URL(request.url);
+    // Pictures of user-made characters: only PNGs directly inside one character folder.
+    const custom = parseUserCharacterPath(url.pathname);
+    if (custom) {
+      const file = characters.fileFor(custom[0], custom[1]);
+      if (!file) return new Response('Not found', { status: 404 });
+      // Never cache: the user replaces these pictures and expects "重新载入形象" to show the new ones.
+      return net.fetch(pathToFileURL(file).toString())
+        .then((res) => new Response(res.body, { status: res.status, headers: { 'content-type': 'image/png', 'cache-control': 'no-store' } }));
+    }
     const file = path.normalize(path.join(root, decodeURIComponent(url.pathname)));
     if (!file.startsWith(root + path.sep)) return new Response('Forbidden', { status: 403 });   // no path traversal
     return net.fetch(pathToFileURL(file).toString());
   });
 }
 
+let characters: CustomCharacters;
+
 /** The chosen character's face (falls back to the default one if the file is missing). */
 function characterIcon(character: CharacterId): Electron.NativeImage {
-  const own = nativeImage.createFromPath(path.join(app.getAppPath(), 'build', CHARACTERS[character].icon));
+  const file = isBuiltinCharacter(character)
+    ? path.join(app.getAppPath(), 'build', CHARACTERS[character].icon)
+    : characters.iconFor(character);
+  const own = file ? nativeImage.createFromPath(file) : nativeImage.createEmpty();
   return own.isEmpty() ? nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon.png')) : own;
 }
 
@@ -75,7 +90,8 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', () => undefined);
 
   void app.whenReady().then(() => {
-    registerAppProtocol();
+    characters = new CustomCharacters(path.join(app.getPath('userData'), 'characters'));
+    registerAppProtocol(characters);
     const config = new ConfigStore();
     const windows = new WindowManager(config);
     const quit = (): void => { quitting = true; config.flush(); app.quit(); };
@@ -84,10 +100,10 @@ if (!app.requestSingleInstanceLock()) {
     const self = new SelfModel(path.join(app.getPath('userData'), 'self.json'));
     const persona = (): string => {
       const s = config.getSettings();
-      return buildPersona({ name: s.petName, appearance: CHARACTERS[s.character].appearance, traits: s.personaTraits, selfState: self.summary() });
+      return buildPersona({ name: s.petName, appearance: characterMeta(s.character, characters.list()).appearance, traits: s.personaTraits, selfState: self.summary() });
     };
     const activity = { streaming: 0 };
-    const life: PetLife = { self, persona, activity };
+    const life: PetLife = { self, persona, activity, characters };
 
     const applySettings = registerIpcHandlers(config, windows, quit, life);
 

@@ -42,6 +42,11 @@ export const IPC = {
   agentPlugins: 'agent:plugins',
   agentOpenFolder: 'agent:open-folder',
   agentEvent: 'evt:agent',
+  // user-made characters
+  charactersList: 'characters:list',
+  charactersOpenFolder: 'characters:open-folder',
+  charactersReloadPet: 'characters:reload-pet',
+  charactersCreate: 'characters:create',
   // main -> renderer
   placement: 'evt:placement',
   dragUpdate: 'evt:drag-update',

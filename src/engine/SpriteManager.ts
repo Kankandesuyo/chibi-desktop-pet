@@ -1,12 +1,8 @@
 import { Texture } from 'pixi.js';
 import type { PetState } from '../../shared/types';
-import type { CharacterId } from '../../shared/characters';
-import { CHARACTER_ART } from '../config/characters';
+import type { CharacterId, CustomCharacterInfo } from '../../shared/characters';
+import { resolveCharacterArt } from '../config/characters';
 import { DEFAULT_STATE_POSES } from '../config/petConfig';
-
-/** Every PNG in assets/characters (and one folder per extra character) is picked up at build time. */
-const FILE_URLS = import.meta.glob<string>('../../assets/characters/**/*.png', { eager: true, import: 'default', query: '?url' });
-const ROOT = '../../assets/characters/';
 
 export interface Pose {
   name: string;
@@ -70,8 +66,10 @@ export class SpriteManager {
   /** Manifest `walkSpeedScale`: how fast this character walks compared with the default. */
   readonly walkSpeedScale: number;
   private readonly manifest: Record<string, unknown>;
-  /** Folder prefix of this character's pictures, e.g. '../../assets/characters/deepseek/'. */
-  private readonly prefix: string;
+  /** Picture file name -> URL, for this character's folder only. */
+  private readonly urlByFile: Map<string, string>;
+  /** The character actually shown (a custom one that is gone falls back to the default). */
+  readonly character: CharacterId;
   /** States that have no art of their own for this character (shown with procedural motion). */
   readonly missing: string[];
   private fallbackName = 'idle';
@@ -83,10 +81,11 @@ export class SpriteManager {
   mouthOpen = '';
   mouthClosed = '';
 
-  constructor(readonly character: CharacterId = 'orange') {
-    const art = CHARACTER_ART[character] ?? CHARACTER_ART.orange;
+  constructor(character: CharacterId = 'orange', custom: readonly CustomCharacterInfo[] = []) {
+    const art = resolveCharacterArt(character, custom);
+    this.character = art.character;
     this.manifest = art.manifest;
-    this.prefix = art.dir ? `${ROOT}${art.dir}/` : ROOT;
+    this.urlByFile = art.urlByFile;
     const m = this.manifest;
     this.walkSpeedScale = typeof m.walkSpeedScale === 'number' && m.walkSpeedScale > 0 ? Math.min(3, Math.max(0.3, m.walkSpeedScale)) : 1;
     this.missing = Array.isArray(m.missing) ? (m.missing as unknown[]).filter((x): x is string => typeof x === 'string') : [];
@@ -113,11 +112,7 @@ export class SpriteManager {
       }
     }
 
-    const urlByFile = new Map<string, string>();
-    for (const [path, url] of Object.entries(FILE_URLS)) {
-      const rest = path.startsWith(this.prefix) ? path.slice(this.prefix.length) : null;
-      if (rest && !rest.includes('/')) urlByFile.set(rest, url);            // this character's own folder only
-    }
+    const urlByFile = this.urlByFile;
 
     const declared = (m.poses ?? {}) as Record<string, Record<string, unknown>>;
     const jobs: Promise<void>[] = [];
@@ -188,7 +183,7 @@ export class SpriteManager {
     const r = (raw ?? null) as Record<string, unknown> | null;
     if (!r || typeof r.body !== 'string' || typeof r.leg !== 'string' || !isPoint(r.origin) || !isPoint(r.hip)) return null;
     const files = Object.fromEntries((await Promise.all([r.body, r.leg].map(async (f) => {
-      const url = FILE_URLS[`${this.prefix}${f}`];
+      const url = this.urlByFile.get(f as string);
       return [f, url ? await loadImage(url).catch(() => null) : null] as const;
     }))));
     const body = files[r.body]; const leg = files[r.leg];

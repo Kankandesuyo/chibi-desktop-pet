@@ -68,7 +68,7 @@ export class PetEngine implements InteractionHost {
 
   constructor(private readonly api: PetAPI, private readonly hooks: EngineHooks, initial: InitialData) {
     this.settings = initial.settings;
-    this.sprites = new SpriteManager(initial.settings.character);
+    this.sprites = new SpriteManager(initial.settings.character, initial.customCharacters ?? []);
     this.emotion = new EmotionSystem(initial.stats, (stats) => this.onStatsChanged(stats));
     this.movement = new MovementController(initial.placement.feet, initial.placement.workArea);
     this.movement.size = initial.settings.size;

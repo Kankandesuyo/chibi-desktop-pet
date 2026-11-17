@@ -18,6 +18,10 @@ function validateSettings(input, config) {
     if (ranges[key]) {
       if (typeof v !== 'number' || !Number.isFinite(v) || v < ranges[key][0] || v > ranges[key][1]) fail('外观数值超出范围');
     } else if (key === 'character') {
+      // The web page only knows the packaged characters and shows a desktop custom character as the default one.
+      // Saving that unchanged default must not replace the custom character chosen on the desktop.
+      const current = config.getSettings().character;
+      if (v === characterId(current) && v !== current) continue;
       if (typeof v !== 'string' || !Object.hasOwn(catalog, v)) fail('请选择橙发女孩或 DeepSeek 鲸鱼妹');
     } else if (key === 'petName') {
       if (typeof v !== 'string' || !v.trim() || v.length > 12 || /[\r\n\t[\]<>]/.test(v)) fail('桌宠名称应为 1～12 字，不能包含特殊标签');

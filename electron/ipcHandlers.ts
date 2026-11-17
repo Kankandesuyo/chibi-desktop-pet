@@ -4,6 +4,7 @@ import { IPC } from '../shared/constants';
 import type { AiStreamEvent, InitialData, MenuCommand, PetAction, Point } from '../shared/types';
 import { streamChat } from './aiClient';
 import { sanitizeHistory, sanitizeStats, type ConfigStore } from './configStore';
+import type { CustomCharacters } from './customCharacters';
 import type { SelfModel } from './selfModel';
 import type { WindowManager } from './windowManager';
 
@@ -26,6 +27,8 @@ export interface PetLife {
   activity: { streaming: number };
   /** Called after any settings change has been applied. */
   onSettings?: () => void;
+  /** User-made characters (folder under userData). */
+  characters?: CustomCharacters;
 }
 
 export function registerIpcHandlers(config: ConfigStore, windows: WindowManager, quit: () => void, life?: PetLife): () => void {
@@ -52,6 +55,7 @@ export function registerIpcHandlers(config: ConfigStore, windows: WindowManager,
       stats: config.getStats(),
       placement: windows.getPlacement(),
       chatHistory: config.getChatHistory(),
+      customCharacters: life?.characters?.list() ?? [],
     };
   });
 
@@ -144,6 +148,26 @@ export function registerIpcHandlers(config: ConfigStore, windows: WindowManager,
       .finally(() => { aborts.delete(requestId); if (life) life.activity.streaming = Math.max(0, life.activity.streaming - 1); });
   });
   on(IPC.aiAbort, (_e, requestId) => { if (typeof requestId === 'string') aborts.get(requestId)?.abort(); });
+
+  // ---- user-made characters ----
+  const characters = life?.characters;
+  if (characters) {
+    ipcMain.handle(IPC.charactersList, (e) => (trusted(e) ? characters.refresh() : []));
+    on(IPC.charactersOpenFolder, () => { void shell.openPath(characters.ensureDir()); });
+    on(IPC.charactersReloadPet, () => {
+      characters.refresh();
+      life?.onSettings?.();                                   // icon / theme of the (re)loaded character
+      if (windows.pet && !windows.pet.isDestroyed()) windows.pet.webContents.reloadIgnoringCache();
+    });
+    ipcMain.handle(IPC.charactersCreate, (e, name, manifest, files) => {
+      if (!trusted(e)) return { error: '不允许' };
+      try {
+        return { id: characters.create(name as string, manifest as Record<string, unknown>, files as { name: string; data: Uint8Array }[]).id };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : '创建失败' };
+      }
+    });
+  }
 
   // Chat panel -> pet window: only whitelisted emotion/action values are forwarded.
   on(IPC.notifyPet, (_e, meta) => {

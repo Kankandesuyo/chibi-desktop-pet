@@ -1,4 +1,4 @@
-import type { CharacterId, ThemeChoice } from './characters';
+import type { CharacterId, CustomCharacterInfo, ThemeChoice } from './characters';
 import type { MonologueLevel } from './persona';
 /** Types and constants shared by the Electron main process and the renderer. */
 import type { AgentEvent, AgentInfo, AgentPetSignal, AgentSettings, AgentStepView, ConfirmDecision, ConfirmRequest, McpServerConfig, PlanStepView } from './agentTypes';
@@ -97,6 +97,8 @@ export interface InitialData {
   stats: PetStats;
   placement: PetPlacement;
   chatHistory: ChatMessage[];
+  /** User-made characters found in the characters folder. */
+  customCharacters: CustomCharacterInfo[];
 }
 
 /** The only surface the renderer can reach — exposed by preload.ts as `window.petAPI`. */
@@ -138,6 +140,13 @@ export interface PetAPI {
   agentPlugins(op: { type: 'approve'; name: string; approve: boolean } | { type: 'reload' } | { type: 'setMcp'; servers: McpServerConfig[] }): Promise<AgentInfo>;
   agentOpenFolder(kind: 'logs' | 'plugins'): void;
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
+  // user-made characters
+  /** Re-reads the characters folder. */
+  listCharacters(): Promise<CustomCharacterInfo[]>;
+  openCharactersFolder(): void;
+  /** Reloads the pet window so edited pictures show up. */
+  reloadPet(): void;
+  createCharacter(name: string, manifest: Record<string, unknown>, files: { name: string; data: Uint8Array }[]): Promise<{ id?: CharacterId; error?: string }>;
   // events from main
   onPlacement(cb: (p: PetPlacement) => void): () => void;
   onDragUpdate(cb: (u: DragUpdate) => void): () => void;
