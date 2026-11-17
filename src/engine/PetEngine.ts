@@ -334,6 +334,12 @@ export class PetEngine implements InteractionHost {
       case 'shy': m.request('shy'); break;
       case 'angry': m.request('angry'); break;
       case 'lookAround': m.request('lookAround'); break;
+      case 'eat':
+        // Only characters drawn eating can do it; the others are just pleased at the idea.
+        if (!this.scenes.includes('eating')) m.request('happy');
+        else if (fromUser && !m.isDragging() && m.state !== 'falling' && m.state !== 'eating') m.force('eating');
+        else m.request('eating');
+        break;
       case 'sleep':
         if (fromUser && !m.isDragging() && m.state !== 'falling') m.force('sleeping');
         else m.request('sleeping');

@@ -85,6 +85,16 @@ export const CHARACTERS: Record<BuiltinCharacterId, { label: string; appearance:
   },
 };
 
+/** Built-in characters whose art has an eating sequence (kept in step with their manifest by a test). */
+export const BUILTIN_EATING: readonly BuiltinCharacterId[] = ['deepseek'];
+
+/** Whether this character can play the eating scene (menu item, AI action). */
+export function canEat(id: CharacterId, custom: readonly CustomCharacterInfo[] = []): boolean {
+  if (isBuiltinCharacter(id)) return BUILTIN_EATING.includes(id);
+  const seq = (custom.find((c) => c.id === id && !c.error)?.manifest.sequences as Record<string, { frames?: unknown }> | undefined)?.eating;
+  return Array.isArray(seq?.frames) && seq.frames.length >= 2;
+}
+
 export function isCharacterId(v: unknown): v is CharacterId {
   return isBuiltinCharacter(v) || isCustomCharacterId(v);
 }

@@ -16,7 +16,7 @@ export const EMOTIONS = ['neutral', 'happy', 'shy', 'angry', 'sleepy', 'surprise
 export type Emotion = (typeof EMOTIONS)[number];
 
 /** Actions the AI (or the right-click menu) may ask the pet to perform. Anything else is rejected. */
-export const PET_ACTIONS = ['none', 'wave', 'jump', 'happy', 'shy', 'angry', 'sleep', 'wink', 'lookAround'] as const;
+export const PET_ACTIONS = ['none', 'wave', 'jump', 'happy', 'shy', 'angry', 'sleep', 'wink', 'lookAround', 'eat'] as const;
 export type PetAction = (typeof PET_ACTIONS)[number];
 
 export interface PetStats {

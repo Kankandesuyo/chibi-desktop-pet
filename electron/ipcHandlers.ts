@@ -1,5 +1,6 @@
 import { app, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { isEmotion, isPetAction } from '../shared/aiProtocol';
+import { canEat } from '../shared/characters';
 import { IPC } from '../shared/constants';
 import type { AiStreamEvent, InitialData, MenuCommand, PetAction, Point } from '../shared/types';
 import { streamChat } from './aiClient';
@@ -103,7 +104,11 @@ export function registerIpcHandlers(config: ConfigStore, windows: WindowManager,
     });
     const template: MenuItemConstructorOptions[] = [
       { label: '聊天', click: () => windows.openPanel('chat') },
-      { label: '切换动作', submenu: ACTION_LABELS.map(([label, action]) => ({ label, click: () => send({ type: 'action', action }) })) },
+      {
+        label: '切换动作',
+        submenu: [...ACTION_LABELS, ...(canEat(s.character, life?.characters?.list()) ? [['吃饭', 'eat'] as [string, PetAction]] : [])]
+          .map(([label, action]) => ({ label, click: () => send({ type: 'action', action }) })),
+      },
       {
         label: '调整大小',
         submenu: SIZE_PRESETS.map(([label, size]) => ({

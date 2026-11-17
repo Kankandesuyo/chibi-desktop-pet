@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { characterMeta, isCharacterId, resolveTheme } from '../../shared/characters';
+import { BUILTIN_EATING, CHARACTER_IDS, canEat, characterMeta, isCharacterId, resolveTheme, type CustomCharacterInfo } from '../../shared/characters';
 import { CustomCharacters, parseUserCharacterPath, README_NAME } from '../../electron/customCharacters';
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -84,5 +84,27 @@ describe('custom characters folder', () => {
     expect(() => c.create('x', {}, [{ name: 'run.exe', data: PNG_BYTES }])).toThrow(/图片无效/);
     expect(() => c.create('x', {}, [])).toThrow(/数量/);
     expect(fs.readdirSync(c.dir).filter((n) => n.startsWith('.creating'))).toEqual([]);
+  });
+});
+
+describe('eating scene availability', () => {
+  it('matches the built-in manifests', () => {
+    const root = path.join(__dirname, '..', '..', 'assets', 'characters');
+    const dirs: Record<string, string> = { orange: '', deepseek: 'deepseek' };
+    for (const id of CHARACTER_IDS) {
+      const m = JSON.parse(fs.readFileSync(path.join(root, dirs[id] ?? id, 'manifest.json'), 'utf8')) as { sequences?: Record<string, unknown> };
+      expect(BUILTIN_EATING.includes(id), id).toBe(Boolean(m.sequences?.eating));
+    }
+    expect(canEat('deepseek')).toBe(true);
+    expect(canEat('orange')).toBe(false);
+  });
+
+  it('follows the manifest of a custom character', () => {
+    const base = { folder: 'x', label: 'x', appearance: '', note: '', theme: 'orange' as const, files: ['a.png'], hasIcon: false };
+    const withSeq: CustomCharacterInfo = { ...base, id: 'custom:x', manifest: { sequences: { eating: { frames: ['a', 'b'] } } } };
+    const without: CustomCharacterInfo = { ...base, id: 'custom:y', folder: 'y', manifest: {} };
+    expect(canEat('custom:x', [withSeq, without])).toBe(true);
+    expect(canEat('custom:y', [withSeq, without])).toBe(false);
+    expect(canEat('custom:gone', [withSeq])).toBe(false);
   });
 });

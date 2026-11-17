@@ -247,7 +247,7 @@ export async function captureFrames(windows: WindowManager, dir: string, quit: (
     ['dragEnd2', "e.drag.end(); e.grabPoint=null; e.machine.force('idle'); e.anim.setPose(e.sprites.pose('idle'), true)", 1, 100],
     ['petting', "e.machine.force('petting'); e.anim.setPose(e.sprites.posesFor('petting')[0], true)", 1, 200],
     ['shy', "e.machine.force('shy'); e.anim.setPose(e.sprites.posesFor('shy')[0], true)", 1, 200],
-    ['eating', "e.machine.force(e.sprites.sequence('eating') ? 'eating' : 'idle')", 14, 220],
+    ['eating', "e.machine.force('idle'); e.perform('eat', true)", 14, 220],    // same path as the right-click menu
     ['sleeping', "e.machine.force('sleeping'); e.anim.setPose(e.sprites.posesFor('sleeping')[0], true)", 1, 200],
     ['jump', "e.machine.force('jump'); e.anim.setPose(e.sprites.posesFor('jump')[0], true)", 2, 120],
     ['falling', "e.machine.force('falling'); e.anim.setPose(e.sprites.posesFor('falling')[0], true)", 1, 150],
