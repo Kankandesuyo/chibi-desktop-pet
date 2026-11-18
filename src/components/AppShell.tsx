@@ -149,18 +149,17 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
             {sessions.length === 0 && <p className="hx-side-empty">还没有会话</p>}
           </div>
         </div>
-        <div className="nav-group nav-fixed">
-          {nav('schedules', '⏰', '定时任务')}
-          {nav('skills', '🧩', '技能')}
-        </div>
         <div className="nav-foot" ref={menuRef} data-open={menu ? '1' : '0'}>
           {menu && (
             <div className="me-menu" role="menu">
+              <button type="button" role="menuitem" className={page === 'schedules' ? 'on' : ''} onClick={() => go('schedules')}><span className="nav-icon">⏰</span>定时任务</button>
+              <button type="button" role="menuitem" className={page === 'skills' ? 'on' : ''} onClick={() => go('skills')}><span className="nav-icon">🧩</span>技能</button>
+              <hr />
               <button type="button" role="menuitem" className={page === 'profile' ? 'on' : ''} onClick={() => go('profile')}><span className="nav-icon">👤</span>我的资料</button>
               <button type="button" role="menuitem" className={page === 'settings' ? 'on' : ''} onClick={() => go('settings')}><span className="nav-icon">⚙</span>设置<kbd>Ctrl+,</kbd></button>
             </div>
           )}
-          <button type="button" className={`nav-me${menu || page === 'profile' || page === 'settings' ? ' on' : ''}`} onClick={() => setMenu((m) => !m)} title="我的资料、设置" aria-haspopup="menu" aria-expanded={menu}>
+          <button type="button" className={`nav-me${menu || page !== 'chat' ? ' on' : ''}`} onClick={() => setMenu((m) => !m)} title="定时任务、技能、我的资料、设置" aria-haspopup="menu" aria-expanded={menu}>
             {userAvatar ? <img src={userAvatar} alt="" className="hx-avatar small" /> : <span className="hx-avatar small hx-avatar-letter">{me.slice(0, 1)}</span>}
             <span className="nav-me-name">{me}</span><span className="nav-me-caret">{menu ? '▾' : '▴'}</span>
           </button>
