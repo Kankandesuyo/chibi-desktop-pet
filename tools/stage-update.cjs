@@ -52,6 +52,15 @@ const time = /\btime["'`]?:["'`](\d{4}-\d\d-\d\d \d\d:\d\d)["'`]/.exec(code)?.[1
 const dirty = /\bcommit["'`]?:["'`][0-9a-f]+["'`],dirty["'`]?:(true|!0)/.test(code);
 console.log(`✓ ${entry} · build ${stamp}${dirty ? '+' : ''} · ${time} · ${(fs.statSync(built).size / 1048576).toFixed(1)} MB`);
 
+// Every update raises the version by 0.0.1 (shown in 设置 → 关于), so it must be above the installed one.
+const versionOf = (archive) => { try { return JSON.parse(readFromAsar(archive, 'package.json').toString('utf8')).version; } catch { return null; } };
+const newer = (a, b) => { const x = a.split('.').map(Number); const y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+const version = versionOf(built);
+const installed = versionOf(path.resolve(root, '..', 'resources', 'app.asar'));
+if (!version) fail('the package has no version');
+if (installed && !newer(version, installed)) fail(`version ${version} is not above the installed ${installed}: bump package.json by 0.0.1 first`);
+console.log(`✓ version ${installed ?? '?'} → ${version}`);
+
 if (process.argv.includes('--check-only')) process.exit(0);
 fs.copyFileSync(built, target);
 console.log(`✓ staged ${target}`);
