@@ -105,7 +105,7 @@ export type PanelAction = 'state' | 'toggle-pin' | 'toggle-fullscreen' | 'hide';
 /** A new build staged as resources/app.asar.new, installed from inside the app. */
 export interface UpdateStatus { ready: boolean; stagedAt?: number; error?: string }
 /** The built-in browser pane in the main window. */
-export interface BrowserPaneState { open: boolean; url: string; title: string; loading: boolean; canGoBack: boolean; canGoForward: boolean }
+export interface BrowserPaneState { open: boolean; url: string; title: string; loading: boolean; canGoBack: boolean; canGoForward: boolean; error?: string }
 export type BrowserPaneAction =
   | { type: 'open'; url?: string } | { type: 'navigate'; url: string }
   | { type: 'blank' } | { type: 'back' } | { type: 'forward' } | { type: 'reload' } | { type: 'external' } | { type: 'close' };
@@ -178,7 +178,7 @@ export interface PetAPI {
   updateApply(): Promise<{ ok: boolean; error?: string }>;
   onUpdate(cb: (s: UpdateStatus) => void): () => void;
   /** Built-in browser pane: where it sits (null = hidden), toolbar actions, state. */
-  browserBounds(b: { x: number; y: number; width: number; height: number } | null): void;
+  browserBounds(b: { x: number; y: number; width: number; height: number; show: boolean } | null): void;
   browserControl(a: BrowserPaneAction): Promise<BrowserPaneState>;
   browserState(): Promise<BrowserPaneState>;
   onBrowser(cb: (s: BrowserPaneState) => void): () => void;

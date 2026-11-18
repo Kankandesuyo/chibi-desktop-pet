@@ -42,7 +42,8 @@ export function BrowserPane({ state, width, onWidth }: { state: BrowserPaneState
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [recent, setRecent] = useState<Visit[]>(loadRecent);
-  const blank = !/^https?:/.test(state.url);
+  const blank = !/^https?:/.test(state.url) && !state.error;
+  const failed = !!state.error;
   useEffect(() => { if (!editing) setAddr(state.url); }, [state.url, editing]);
   // Remember where we have been (for the start page).
   useEffect(() => {
@@ -56,17 +57,18 @@ export function BrowserPane({ state, width, onWidth }: { state: BrowserPaneState
   useLayoutEffect(() => {
     const el = areaRef.current;
     if (!el) return undefined;
+    // Always report the size (so the right layout is picked before a page loads); show the page only when
+    // it is a real page, not the start / error page, and not while the divider is dragged.
     const send = (): void => {
-      if (dragging || blank) { window.petAPI.browserBounds(null); return; }
       const r = el.getBoundingClientRect();
-      window.petAPI.browserBounds({ x: r.left, y: r.top, width: r.width, height: r.height });
+      window.petAPI.browserBounds({ x: r.left, y: r.top, width: r.width, height: r.height, show: !dragging && !blank && !failed });
     };
     send();
     const ro = new ResizeObserver(send);
     ro.observe(el);
     window.addEventListener('resize', send);
     return () => { ro.disconnect(); window.removeEventListener('resize', send); };
-  }, [dragging, blank]);
+  }, [dragging, blank, failed]);
   useEffect(() => () => window.petAPI.browserBounds(null), []);
 
   const act = (a: BrowserPaneAction): void => { void window.petAPI.browserControl(a); };
@@ -142,7 +144,18 @@ export function BrowserPane({ state, width, onWidth }: { state: BrowserPaneState
             )}
           </div>
         )}
-        {dragging && !blank && <div className="browser-drag-hint">{state.title || state.url}</div>}
+        {failed && (
+          <div className="browser-error">
+            <b>{t('网页打不开')}</b>
+            <p>{state.error}</p>
+            <small>{t('检查网络或代理设置后再试；也可以在系统浏览器中打开。')}</small>
+            <div className="browser-error-actions">
+              <button type="button" className="btn primary" onClick={() => act({ type: 'reload' })}>{t('重试')}</button>
+              <button type="button" className="btn ghost" onClick={() => act({ type: 'external' })}>{t('在系统浏览器中打开')}</button>
+            </div>
+          </div>
+        )}
+        {dragging && !blank && !failed && <div className="browser-drag-hint">{state.title || state.url}</div>}
       </div>
     </aside>
   );
