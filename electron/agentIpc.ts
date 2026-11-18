@@ -75,6 +75,8 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
     if (o.type === 'approve' && typeof o.name === 'string') agent.plugins.approve(o.name, o.approve === true);
     // Hooks run the user's commands: only a click in the settings window turns the current hooks.json on.
     if (o.type === 'approveHooks') { agent.userHooks.approve(o.approve === true); return info(); }
+    if (o.type === 'scheduleToggle' && typeof o.name === 'string') { agent.scheduler.setEnabled(o.name, o.approve === true); return info(); }
+    if (o.type === 'scheduleDelete' && typeof o.name === 'string') { agent.scheduler.remove(o.name); return info(); }
     if (o.type === 'setMcp') config.setMcpServers(o.servers);
     if (o.type === 'approve' || o.type === 'setMcp' || o.type === 'reload') { await agent.plugins.reloadAll(); agent.applyGroups(); }
     return info();

@@ -1,4 +1,4 @@
-import { app, ipcMain, Menu, nativeImage, net, powerMonitor, protocol, Tray } from 'electron';
+import { app, ipcMain, Menu, nativeImage, net, Notification, powerMonitor, protocol, Tray } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -139,7 +139,26 @@ if (!app.requestSingleInstanceLock()) {
       legacyHistoryFile: path.join(app.getPath('userData'), 'remote-chat', 'shared-history.json'),
       legacyDesktopHistory: () => config.getChatHistory(),
     });
-    remote.start({ config, agent, windows, life, app, streamChat, notifyChannel: IPC.petNotify, ipcMain, applySettings, conversation });
+    const remoteChat = remote.start({ config, agent, windows, life, app, streamChat, notifyChannel: IPC.petNotify, ipcMain, applySettings, conversation });
+
+    // ---- scheduled / proactive tasks: run unattended and read-only through the shared conversation ----
+    const runDueTasks = (): void => {
+      const ready = config.getSettings().aiEnabled && !!config.getApiKey() && config.getAgentSettings().enabled;
+      if (!ready || !remoteChat?.send || agent.controller.isRunning() || activity.streaming > 0) return;
+      const task = agent.scheduler.due()[0];
+      if (!task) return;
+      // One at a time; if she just got busy, it stays due and runs on a later tick.
+      if (remoteChat.send(`⏰ 定时任务「${task.name}」：${task.prompt}`, 'schedule', { readOnly: true, unattended: true, scheduleId: task.id })) agent.scheduler.markRun(task.id);
+    };
+    const scheduleTimer = setInterval(runDueTasks, 30_000);
+    setTimeout(runDueTasks, 15_000);
+    app.on('will-quit', () => clearInterval(scheduleTimer));
+    agent.onScheduledDone((task, text, ok) => {
+      if (!Notification.isSupported()) return;
+      const n = new Notification({ title: `⏰ ${task.name}${ok ? '' : '（没有完成）'}`, body: text.slice(0, 160), icon: characterIcon(config.getSettings().character) });
+      n.on('click', () => { windows.setPetVisible(true); windows.focusChat(); });
+      n.show();
+    });
 
     const monologue = new Monologue({
       level: () => config.getSettings().monologue,

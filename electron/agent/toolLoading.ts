@@ -14,7 +14,7 @@ const CORE_GROUPS = new Set<string>(['internal', 'files', 'apps', 'system', 'mem
 /** Single tools sent with every request although their group is loaded on demand. */
 const ALWAYS = new Set<string>(['pet_web_search', 'pet_web_read']);
 /** Below this many enabled tools everything is sent as before. */
-export const LAZY_THRESHOLD = 40;
+export const LAZY_THRESHOLD = 48;
 
 export const DEFERRED_GROUPS: Record<string, string> = {
   ui: '界面自动化和 Computer Use：列窗口、点按钮、输入文字、按键、滚动、截图分析、指给用户看',

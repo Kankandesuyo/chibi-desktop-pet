@@ -117,6 +117,10 @@ export interface AgentServices {
   pointAt?: (target: ScreenTarget) => void;
   /** Built-in and user skills (load_skill / save_skill). */
   skills?: import('./Skills').SkillLibrary;
+  /** Scheduled / proactive tasks. */
+  scheduler?: import('./Scheduler').Scheduler;
+  /** Helpers (subagents) for delegate_task. */
+  helpers?: { run(task: string, parent: { taskId: string; signal: AbortSignal }): Promise<ToolResult> };
 }
 
 /** A spot on the primary display, as fractions of its width and height (0–1), with a short name. */

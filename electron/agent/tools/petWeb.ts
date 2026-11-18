@@ -2,7 +2,15 @@ import type { BrowserWindow } from 'electron';
 import { defineTool } from '../types';
 
 let window: BrowserWindow | undefined;
-let sources: string[] = [];
+/** Results of the last search, per task (helpers searching side by side must not swap results). */
+const sources = new Map<string, string[]>();
+/** There is one browser window: searches and reads take turns. */
+let queue: Promise<unknown> = Promise.resolve();
+function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(fn, fn);
+  queue = run.catch(() => undefined);
+  return run;
+}
 const engines = {
   bing: ['https://www.bing.com/search?q=', '#b_results .b_algo h2 a'],
   baidu: ['https://www.baidu.com/s?wd=', '#content_left h3 a'],
@@ -27,7 +35,7 @@ function getWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (!/^https?:\/\//i.test(url)) event.preventDefault(); });
   win.on('page-title-updated', (event, title) => { event.preventDefault(); win.setTitle('桌宠浏览器 · ' + title.slice(0, 100)); });
-  win.on('closed', () => { window = undefined; sources = []; });
+  win.on('closed', () => { window = undefined; sources.clear(); });
   window = win;
   return win;
 }
@@ -53,17 +61,17 @@ export const petWebSearch = defineTool<{query: string; engine?: keyof typeof eng
   description: '在桌宠内置浏览器搜索公开资料。返回编号、标题和链接，供 pet_web_read 继续阅读。',
   inputSchema: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 300 }, engine: { type: 'string', enum: ['bing', 'baidu', 'google'] } }, required: ['query'] },
   title: a => '联网搜索：' + a.query,
-  execute: async (a, ctx) => {
-    sources = [];
+  execute: async (a, ctx) => exclusive(async () => {
+    sources.delete(ctx.taskId);
     const [base, selector] = engines[a.engine ?? 'bing'];
     const page = await visit(base + encodeURIComponent(a.query), ctx.signal);
     const results: {title: string; url: string}[] = await page.executeJavaScriptInIsolatedWorld(999, [{code:
       `Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(a => ({title: a.innerText.trim().slice(0,200), url: a.href})).filter(r => r.title && /^https?:/.test(r.url)).slice(0,10)`
     }]);
-    sources = results.map(item => item.url);
+    sources.set(ctx.taskId, results.map(item => item.url));
     if (!results.length) return { ok: false, summary: '未读到搜索结果', error: '搜索页可能要求验证或暂时不可用，可换搜索引擎再试。', external: true };
     return { ok: true, summary: '找到 ' + results.length + ' 条搜索结果', data: results.map((r,i) => ({ index: i + 1, ...r })), external: true };
-  },
+  }),
 });
 
 export const petWebRead = defineTool<{index: number}>({
@@ -71,12 +79,12 @@ export const petWebRead = defineTool<{index: number}>({
   description: '在桌宠内置浏览器阅读上一次搜索结果中的指定条目，返回正文和实际来源网址。',
   inputSchema: { type: 'object', properties: { index: { type: 'integer', minimum: 1, maximum: 10 } }, required: ['index'] },
   title: a => '阅读搜索结果 ' + a.index,
-  execute: async (a, ctx) => {
-    const url = sources[a.index - 1];
+  execute: async (a, ctx) => exclusive(async () => {
+    const url = sources.get(ctx.taskId)?.[a.index - 1];
     if (!url) return { ok: false, summary: '找不到这条结果', error: '请重新搜索并选择有效编号。' };
     const page = await visit(url, ctx.signal);
     const text: string = await page.executeJavaScriptInIsolatedWorld(999, [{code: "(document.querySelector('main,article') || document.body)?.innerText.trim().slice(0,10000) || ''"}]);
     if (!text) return { ok: false, summary: '网页没有可读正文', error: '可尝试其他来源。' };
     return { ok: true, summary: '已读取 ' + page.getTitle(), data: { url: page.getURL(), title: page.getTitle(), text }, external: true };
-  },
+  }),
 });

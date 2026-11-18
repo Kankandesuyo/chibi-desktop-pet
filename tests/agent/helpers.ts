@@ -6,6 +6,7 @@ import { TOOL_GROUPS } from '../../shared/agentTypes';
 import type { ChatMessage, PetStats } from '../../shared/types';
 import { createAgentRuntime, type AgentRuntime, type AgentRuntimeOptions } from '../../electron/agent';
 import type { LlmClient, LlmMessage, LlmRequest, LlmTurn } from '../../electron/agent/llm';
+import type { RunOptions } from '../../electron/agent/AgentController';
 import type { DesktopPlatform, InstalledApp, KnownFolders, RunningApp } from '../../electron/agent/types';
 
 export const STATS: PetStats = { mood: 'neutral', affection: 50, energy: 80, interactionCount: 0 };
@@ -143,7 +144,7 @@ export interface Harness {
   approvals: Record<string, string>;
   mcp: McpServerConfig[];
   /** Runs one request; confirmations are answered by `decide` (default: allow). */
-  run(text: string, opts?: { decide?: (r: ConfirmRequest) => ConfirmDecision | Promise<ConfirmDecision>; history?: ChatMessage[] }): Promise<RunResult>;
+  run(text: string, opts?: { decide?: (r: ConfirmRequest) => ConfirmDecision | Promise<ConfirmDecision>; history?: ChatMessage[]; runOptions?: RunOptions }): Promise<RunResult>;
   cleanup(): void;
 }
 
@@ -185,7 +186,7 @@ export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platfo
           if (e.type === 'error') res.error = e.message;
         },
         pet: (s) => res.pet.push(s),
-      });
+      }, o.runOptions);
       return res;
     },
     cleanup() { void rt.shutdown(); platform.cleanup(); },

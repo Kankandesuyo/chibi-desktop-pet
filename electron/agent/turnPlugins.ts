@@ -98,10 +98,11 @@ const READ_ONLY_EXTRA = new Set(['read_file', 'update_plan', 'read_process_outpu
 export function readOnlyPlugin(hooks: TurnHooks, registry: ToolRegistry, readOnly: () => boolean): () => void {
   const offs = [
     hooks.on('turn/start', 'read-only-mode', (ctx) => {
-      if (readOnly()) ctx.systemSections.push('## 当前是只读模式\n用户选择了只读模式：你只能用查看类工具（列目录、搜索、读文件、查进程等）了解情况，不能新建、移动、删除、运行或修改任何东西。需要改动时，把具体步骤列给用户，请用户切换到“询问”模式后再做。');
+      if (readOnly() && !ctx.state.get('run.unattended')) ctx.systemSections.push('## 当前是只读模式\n用户选择了只读模式：你只能用查看类工具（列目录、搜索、读文件、查进程等）了解情况，不能新建、移动、删除、运行或修改任何东西。需要改动时，把具体步骤列给用户，请用户切换到“询问”模式后再做。');
     }),
-    hooks.on('tool/pre', 'read-only-mode', (_ctx, call) => {
-      if (!readOnly()) return undefined;
+    hooks.on('tool/pre', 'read-only-mode', (ctx, call) => {
+      // The setting, or this run only (scheduled tasks run read-only).
+      if (!readOnly() && !ctx.state.get('run.readOnly')) return undefined;
       const tool = registry.get(call.name);
       const builtin = !tool?.source || tool.source === 'builtin';
       if (tool && builtin && (tool.concurrencySafe || READ_ONLY_EXTRA.has(tool.name))) return undefined;

@@ -157,6 +157,21 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
         <button type="button" onClick={() => void refresh()}>刷新</button>
       </div>
 
+      <h3>定时任务</h3>
+      <small className="hint">直接对她说就能新建，例如“每天早上 9 点帮我看看下载文件夹里有什么新文件”“下载文件夹超过 50 个文件时提醒我整理”（新建前会请你确认）。定时任务在没人看着时运行，<b>只查看和汇报，不会修改电脑</b>；需要动手的事会列在汇报里，结果会出现在聊天里和系统通知中。</small>
+      <ul className="plain-list">
+        {info?.schedules.length === 0 && <li className="muted">还没有定时任务</li>}
+        {info?.schedules.map((t) => (
+          <li key={t.id}>
+            <b>{t.name}</b> · {t.when}{t.enabled ? (t.nextRunAt ? ` · 下次 ${new Date(t.nextRunAt).toLocaleString('zh-CN', { hour12: false })}` : '') : ' · 已停用'}
+            <small>{t.prompt}</small>
+            {t.lastResult && <small>上次（{t.lastRunAt ? new Date(t.lastRunAt).toLocaleString('zh-CN', { hour12: false }) : ''}）：{t.lastResult}</small>}
+            <button type="button" className="link" onClick={async () => refresh(await window.petAPI.agentPlugins({ type: 'scheduleToggle', name: t.id, approve: !t.enabled }))}>{t.enabled ? '停用' : '启用'}</button>
+            <button type="button" className="link" onClick={async () => refresh(await window.petAPI.agentPlugins({ type: 'scheduleDelete', name: t.id }))}>删除</button>
+          </li>
+        ))}
+      </ul>
+
       <h3>插件</h3>
       <small className="hint">把插件文件夹放进插件目录（含 plugin.json），在这里批准后才会运行。插件改动后需要重新批准。插件代码拥有和桌宠一样的权限，只安装你信任的插件。</small>
       <ul className="plain-list">

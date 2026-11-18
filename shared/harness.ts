@@ -46,4 +46,5 @@ export const SLASH_COMMANDS: readonly { name: string; aliases: readonly string[]
   { name: 'skills', aliases: ['技能'], help: '看看她会哪些技能（内置的和你教的）' },
   { name: 'permissions', aliases: ['权限'], help: '看看当前的权限模式和规则' },
   { name: 'hooks', aliases: ['钩子'], help: '看看钩子（hooks.json）的状态' },
+  { name: 'schedule', aliases: ['定时'], help: '看看定时任务（让她“每天 9 点…”就能新建）' },
 ];

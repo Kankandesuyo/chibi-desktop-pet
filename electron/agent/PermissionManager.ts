@@ -14,6 +14,8 @@ export interface PermissionPolicy {
   autoApproveMedium: boolean;
   /** The user's allow rule matching this call, if any (medium risk only; see permissionRules.ts). */
   allowRule?(tool: string, args: unknown): string | null;
+  /** Nobody can answer for this task (scheduled run): anything that would ask is skipped instead. */
+  isUnattended?(taskId: string): boolean;
 }
 
 export type Confirmer = (req: Omit<ConfirmRequest, 'confirmId'>, signal: AbortSignal) => Promise<ConfirmDecision>;
@@ -125,6 +127,9 @@ export class PermissionManager {
       if (!needConfirm) return { allowed: true, risk, how: auto ? 'auto' : 'task-grant' };
     }
     if (!needConfirm) return { allowed: true, risk, how: 'auto' };
+    if (this.policy().isUnattended?.(input.taskId)) {
+      return { allowed: false, risk, reason: '这是无人值守的定时任务，需要确认的步骤没有执行（等用户回来再决定）' };
+    }
 
     const timeout = AbortSignal.timeout(this.confirmTimeoutMs);
     const signal = AbortSignal.any([input.signal, timeout]);

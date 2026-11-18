@@ -112,6 +112,26 @@ export interface McpServerConfig {
 
 export interface SkillSummary { name: string; description: string; source: 'builtin' | 'user' }
 
+/** When a scheduled task runs. */
+export type ScheduleTrigger =
+  | { kind: 'daily'; time: string }
+  | { kind: 'interval'; minutes: number }
+  | { kind: 'once'; at: string }
+  | { kind: 'folder'; path: string; minFiles: number };
+
+export interface ScheduleInfo {
+  id: string;
+  name: string;
+  prompt: string;
+  trigger: ScheduleTrigger;
+  /** Human-readable trigger, e.g. "每天 09:00". */
+  when: string;
+  enabled: boolean;
+  lastRunAt?: string;
+  lastResult?: string;
+  nextRunAt?: string;
+}
+
 /** User hooks (hooks.json): none = nothing configured; pending = changed, waiting for approval. */
 export interface HooksStatus {
   file: string;
@@ -122,6 +142,7 @@ export interface HooksStatus {
 }
 
 export interface AgentInfo {
+  schedules: ScheduleInfo[];
   skills: SkillSummary[];
   skillDir: string;
   hooks: HooksStatus;

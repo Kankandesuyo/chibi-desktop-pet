@@ -93,7 +93,7 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
     }
     changed();
   }
-  function sendMessage(input, source = 'web', allowOffline = false) {
+  function sendMessage(input, source = 'web', allowOffline = false, runOptions = undefined) {
     if (active || agent.controller.isRunning() || life.activity.streaming > 0) throw Object.assign(new Error('桌宠正在处理任务，请稍后再试'), { status: 409 });
         if (input.image && (!input.text || typeof input.text === 'string' && !input.text.trim())) input.text = '请描述这张图片。';
         if (typeof input.text !== 'string' || !input.text.trim() || input.text.length > 4000) throw Object.assign(new Error('请输入 1～4000 字的消息'), { status: 400 });
@@ -136,7 +136,7 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
             emit({ type: 'done', requestId: id, reply: '我在呢。AI 目前未启用，可以在设置中开启后继续聊。', emotion: 'neutral', action: 'none', outcome: 'chat' });
           } else if (active.mode === 'agent') {
             agent.refreshSecrets(); agent.applyGroups();
-            await agent.controller.run(id, history, config.getStats(), { emit, pet: signal => windows.sendToPet(notifyChannel, signal) });
+            await agent.controller.run(id, history, config.getStats(), { emit, pet: signal => windows.sendToPet(notifyChannel, signal) }, runOptions);
           } else {
             const controller = new AbortController(); active.abort = () => controller.abort();
             life.activity.streaming++;
@@ -348,6 +348,10 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
   server.listen(port, '127.0.0.1');
   const close = () => { clearTimeout(broadcastTimer); for (const send of [...waiters]) send(); server.close(); server.closeAllConnections(); for (const key of sharedHandlers) ipcMain.removeHandler(key); for (const restore of restoreSettings) restore(); app?.removeListener('second-instance', secondInstance); };
   app?.on('will-quit', close);
-  return { server, close, dataDir };
+  // For the app's scheduler: start a request in the shared conversation. false = busy or not possible right now.
+  function send(text, source = 'schedule', runOptions = undefined) {
+    try { sendMessage({ text }, source, false, runOptions); return true; } catch { return false; }
+  }
+  return { server, close, dataDir, send };
 }
 module.exports = { startRemoteChat };

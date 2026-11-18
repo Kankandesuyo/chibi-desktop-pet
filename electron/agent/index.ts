@@ -31,6 +31,10 @@ import { SkillLibrary } from './Skills';
 import { skillTools } from './tools/skillTools';
 import { UserHooks } from './UserHooks';
 import { loadToolsTool, ToolLoading } from './toolLoading';
+import { helperTools } from './tools/helperTools';
+import { scheduleTools } from './tools/scheduleTools';
+import { Scheduler } from './Scheduler';
+import { RUN_SCHEDULE_ID } from './AgentController';
 
 /**
  * Built-in tools that only look (no side effects, never ask the user), so several in one step may run
@@ -72,7 +76,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   refreshSecrets();
 
   const registry = new ToolRegistry();
-  const builtins = [updatePlanTool, loadToolsTool, ...skillTools, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools];
+  const builtins = [updatePlanTool, loadToolsTool, ...helperTools, ...skillTools, ...scheduleTools, ...systemTools, ...fileTools, ...appTools, ...memoryTools, ...uiTools, ...browserTools, ...devTools, ...adminTools];
   for (const t of builtins) if (CONCURRENCY_SAFE.has(t.name)) t.concurrencySafe = true;
   registry.registerAll(builtins);
 
@@ -95,6 +99,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
     () => ({
       allowedRoots: allowedRoots(), protectedRoots: protectedRoots(), systemZones: systemZones(), autoApproveMedium: o.settings().autoApproveMedium,
       allowRule: (tool, args) => firstMatch(o.settings().permissionRules?.allow ?? [], tool, args),
+      isUnattended: (taskId) => controller?.isUnattended(taskId) ?? false,
     }),
     (req, signal) => (controller ? controller.confirm(req, signal) : Promise.resolve('deny')),
   );
@@ -105,7 +110,8 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   const processes = new ProcessManager();
   const browser = new BrowserSession(o.browser);
   const skills = new SkillLibrary(o.builtinSkillsDir ?? null, path.join(o.baseDir, 'skills'));
-  const services: AgentServices = { memory, planner, journal, processes, browser, skills, vision: o.vision, ...(o.pointAt ? { pointAt: o.pointAt } : {}) };
+  const scheduler = new Scheduler(path.join(o.baseDir, 'schedules.json'));
+  const services: AgentServices = { memory, planner, journal, processes, browser, skills, scheduler, vision: o.vision, ...(o.pointAt ? { pointAt: o.pointAt } : {}) };
   const executor = new ToolExecutor(registry, permissions, new TaskVerifier(), logger, redactor, o.platform, services);
   const redact = (s: string): string => redactor.text(s);
   const hooks = new TurnHooks();
@@ -117,6 +123,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
     settings: o.settings, allowedRoots, persona: o.persona, redact, hooks, recaps, toolLoading: new ToolLoading(registry),
   });
   const ctl = controller;
+  services.helpers = { run: (task, parent) => ctl.runHelper(task, parent) };
   // Built-in turn plugins (order matters only for what ends up first in the log).
   sessionLogPlugin(hooks, sessions, redact);
   recapPlugin(hooks, recaps, sessions);
@@ -133,19 +140,32 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   });
   permissionRulesPlugin(hooks, () => o.settings().permissionRules ?? { allow: [], deny: [] });
   userHooksPlugin(hooks, userHooks, () => sessions.id);
+  // A scheduled run's outcome is kept on the task (shown in settings and /schedule), and reported.
+  const scheduleListeners = new Set<(task: { id: string; name: string }, text: string, ok: boolean) => void>();
+  hooks.on('turn/end', 'scheduler', (ctx, end) => {
+    const id = ctx.state.get(RUN_SCHEDULE_ID) as string | undefined;
+    const task = id ? scheduler.get(id) : null;
+    if (!task) return;
+    const text = end.reply ?? end.error ?? (end.reason === 'aborted' ? '被停止了' : '没有完成');
+    scheduler.recordResult(task.id, text);
+    for (const fn of scheduleListeners) fn(task, text, end.reason === 'completed');
+  });
   const plugins = new ToolPluginManager(registry, path.join(o.baseDir, 'plugins'), o.approvals, o.mcpServers);
   const applyGroups = (): void => registry.setEnabledGroups(o.settings().toolGroups);
   applyGroups();
 
   return {
-    controller, registry, permissions, logger, memory, planner, journal, processes, browser, plugins, redactor, hooks, sessions, recaps, skills, userHooks, instructionsFile,
+    controller, registry, permissions, logger, memory, planner, journal, processes, browser, plugins, redactor, hooks, sessions, recaps, skills, userHooks, instructionsFile, scheduler,
+    /** Called when a scheduled run finishes (for a notification). */
+    onScheduledDone: (fn: (task: { id: string; name: string }, text: string, ok: boolean) => void) => { scheduleListeners.add(fn); return () => scheduleListeners.delete(fn); },
     platform: o.platform,
     /** A chat slash command (/help, /resume…); null when the text is not one. */
-    command: (text: string) => runCommand(text, { controller: ctl, sessions, recaps, registry, skills, userHooks, rules: () => o.settings().permissionRules }),
+    command: (text: string) => runCommand(text, { controller: ctl, sessions, recaps, registry, skills, userHooks, scheduler, rules: () => o.settings().permissionRules }),
     allowedRoots, applyGroups, refreshSecrets,
     info(): AgentInfo {
       const f = o.platform.knownFolders();
       return {
+        schedules: scheduler.info(),
         skills: skills.list().map(({ name, description, source }) => ({ name, description, source })), skillDir: skills.userDir,
         hooks: (userHooks.reload(), userHooks.status()), instructionsFile,
         tools: registry.info(), plugins: plugins.info(), mcpServers: o.mcpServers(), memories: memory.list(),

@@ -7,6 +7,7 @@ import type { ToolRegistry } from './ToolRegistry';
 import type { PermissionRules } from './permissionRules';
 import type { SkillLibrary } from './Skills';
 import type { UserHooks } from './UserHooks';
+import type { Scheduler } from './Scheduler';
 
 /**
  * Chat slash commands: handled right here, without a model turn (after Claude Code's / dsh's commands).
@@ -20,6 +21,7 @@ export interface CommandDeps {
   registry: ToolRegistry;
   skills?: SkillLibrary;
   userHooks?: UserHooks;
+  scheduler?: Scheduler;
   rules?(): PermissionRules | undefined;
 }
 
@@ -112,6 +114,21 @@ const COMMANDS: Command[] = [
       const s = d.userHooks.status();
       const state = { none: '没有配置', pending: '有改动，等你在设置里批准后才会生效', active: '已启用', error: `出错：${s.detail ?? ''}` }[s.state];
       return { reply: [`钩子：${state}${s.count ? `（${s.count} 条：${s.events.join('、')}）` : ''}`, `文件：${s.file}`].join('\n') };
+    },
+  },
+  {
+    names: ['schedule', '定时'], help: '看看定时任务',
+    run: (_a, d) => {
+      const list = d.scheduler?.info() ?? [];
+      if (!list.length) return { reply: '还没有定时任务。可以直接对她说，例如“每天早上 9 点帮我看看下载文件夹里有什么新文件”。' };
+      const when = (iso?: string): string => (iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '—');
+      return {
+        reply: [
+          `定时任务 ${list.length} 个（无人值守时只查看和汇报，不会修改电脑）：`,
+          ...list.map((t) => `· ${t.name}｜${t.when}｜${t.enabled ? `下次 ${when(t.nextRunAt)}` : '已停用'}${t.lastResult ? `\n    上次：${t.lastResult.slice(0, 80)}` : ''}`),
+          '在 设置 → 智能体 → 定时任务 里可以停用或删除。',
+        ].join('\n'),
+      };
     },
   },
 ];
