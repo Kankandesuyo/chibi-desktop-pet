@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { app, ipcMain } from 'electron';
 import type { UpdateStatus } from '../shared/types';
@@ -31,18 +32,32 @@ function applyUpdate(quit: () => void): { ok: boolean; error?: string } {
   if (!status.ready) return { ok: false, error: status.error ?? '没有可安装的更新' };
   const exe = process.execPath;
   const asar = path.join(process.resourcesPath, 'app.asar');
+  const log = path.join(os.tmpdir(), 'chibi-pet-update.log');
+  // Same command-line switches as this run (e.g. --user-data-dir), minus debugger ports.
+  const args = process.argv.slice(1).filter((x) => !/^--(inspect|remote-debugging)/.test(x));
   const script = [
-    `$exe = ${psQuote(exe)}; $new = ${psQuote(stagedFile())}; $asar = ${psQuote(asar)}`,
+    `$exe = ${psQuote(exe)}; $new = ${psQuote(stagedFile())}; $asar = ${psQuote(asar)}; $log = ${psQuote(log)}`,
+    'function Log($m) { Add-Content -LiteralPath $log -Value ((Get-Date -Format s) + " " + $m) -Encoding UTF8 }',
+    'Log "start"',
     // Wait (up to 30 s) for every process of this exe to go away; they hold app.asar open.
     '$deadline = (Get-Date).AddSeconds(30)',
     'while ((Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe }) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 300 }',
     'Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue',
-    'for ($i = 0; $i -lt 20; $i++) { try { Move-Item -LiteralPath $new -Destination $asar -Force -ErrorAction Stop; break } catch { Start-Sleep -Milliseconds 500 } }',
-    'Start-Process -FilePath $exe',
+    '$moved = $false',
+    'for ($i = 0; $i -lt 20 -and -not $moved; $i++) { try { Move-Item -LiteralPath $new -Destination $asar -Force -ErrorAction Stop; $moved = $true } catch { Log ("move failed: " + $_.Exception.Message); Start-Sleep -Milliseconds 500 } }',
+    'Log ("moved=" + $moved)',
+    // Start it again either way: the old version is better than no pet.
+    args.length
+      ? `Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList @(${args.map((x) => psQuote(x.includes(' ') ? `"${x}"` : x)).join(', ')})`
+      : 'Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe)',
+    'Log "restarted"',
   ].join('\n');
   try {
-    const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
-      detached: true, stdio: 'ignore', windowsHide: true,
+    // A plain (even detached) child is killed together with the app when it quits; one started through
+    // `cmd /c start` is not (checked on Windows 11), so the helper outlives us.
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    const child = spawn('cmd.exe', ['/d', '/c', `start "" /b powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ${encoded}`], {
+      detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true,
     });
     child.unref();
   } catch (err) { return { ok: false, error: err instanceof Error ? err.message : String(err) }; }
