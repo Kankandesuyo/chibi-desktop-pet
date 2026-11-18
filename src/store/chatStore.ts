@@ -3,6 +3,7 @@ import type { AgentEvent, AgentStepView, ConfirmDecision, ConfirmRequest, PlanSt
 import { isEmotion, isPetAction, stripPartialTag } from '../../shared/aiProtocol';
 import type { AiStreamEvent, ChatMessage, PetStats, SharedChatSnapshot } from '../../shared/types';
 import { offlineReply } from '../ai/offlineReplies';
+import { tNow } from '../i18n';
 
 /** A chat message plus, for agent replies, what was done to produce it (display only, never sent to the model). */
 export interface UiMessage extends ChatMessage { steps?: AgentStepView[]; outcome?: 'success' | 'failure' | 'chat' }
@@ -44,7 +45,7 @@ const plain = (m: UiMessage[]): ChatMessage[] => m.map(({ role, content }) => ({
 
 export const useChatStore = create<ChatState>((set, get) => {
   const finish = (reply: string, notice: string | null, extra: Partial<UiMessage> = {}): void => {
-    const messages: UiMessage[] = reply || extra.steps?.length ? [...get().messages, { role: 'assistant', content: reply || '（没有回复）', ...extra }] : get().messages;
+    const messages: UiMessage[] = reply || extra.steps?.length ? [...get().messages, { role: 'assistant', content: reply || tNow('（没有回复）'), ...extra }] : get().messages;
     set({ messages, streaming: null, requestId: null, notice, steps: [], plan: [], interim: [], confirms: [] });
     window.petAPI.saveChatHistory(plain(messages));
   };
@@ -123,7 +124,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       } else {
         // The API failed: keep whatever arrived, tell the user, and let the pet carry on.
         window.petAPI.notifyPet({ talking: false });
-        finish(stripPartialTag(rawBuffer).trim(), `AI 出错：${event.message}`);
+        finish(stripPartialTag(rawBuffer).trim(), tNow('AI 出错：{message}', { message: event.message }));
       }
     },
 
@@ -159,7 +160,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         }
         case 'error':
           window.petAPI.notifyPet({ talking: false });
-          finish(stripPartialTag(rawBuffer).trim(), event.message === '已取消' ? '已停止' : `出错了：${event.message}`, { steps: get().steps.filter((s) => s.tool !== 'update_plan'), outcome: 'failure' });
+          finish(stripPartialTag(rawBuffer).trim(), event.message === '已取消' ? tNow('已停止') : tNow('出错了：{message}', { message: event.message }), { steps: get().steps.filter((s) => s.tool !== 'update_plan'), outcome: 'failure' });
           break;
       }
     },

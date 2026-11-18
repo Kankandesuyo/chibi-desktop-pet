@@ -132,7 +132,7 @@ export function lastToolResult(messages: LlmMessage[]): Record<string, unknown> 
 export const DEFAULT_SETTINGS: AgentSettings = {
   enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: false,
   toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as AgentSettings['toolGroups'],
-  toolProtocol: 'native', maxSteps: 20, contextWindow: 0, projectLanguage: 'zh', vision: { baseUrl: '', model: '', hasApiKey: false },
+  toolProtocol: 'native', maxSteps: 20, contextWindow: 0, vision: { baseUrl: '', model: '', hasApiKey: false },
 };
 
 export interface Harness {
@@ -141,6 +141,8 @@ export interface Harness {
   llm: ScriptedLlm;
   settings: AgentSettings;
   baseDir: string;
+  /** The app language she is told to speak (default Chinese). */
+  lang: 'zh' | 'en' | 'ja';
   approvals: Record<string, string>;
   mcp: McpServerConfig[];
   /** Runs one request; confirmations are answered by `decide` (default: allow). */
@@ -157,8 +159,9 @@ export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platfo
   const settings: AgentSettings = { ...DEFAULT_SETTINGS, ...opts.settings };
   const approvals: Record<string, string> = {};
   const mcp: McpServerConfig[] = [];
+  const state = { lang: 'zh' as 'zh' | 'en' | 'ja' };
   const rt = createAgentRuntime({
-    baseDir, platform, llm, settings: () => settings,
+    baseDir, platform, llm, settings: () => settings, language: () => state.lang,
     vision: async (_png, question) => (opts.vision ? opts.vision(question) : '屏幕上是一个记事本窗口'),
     ...(opts.pointAt ? { pointAt: opts.pointAt } : {}),
     secrets: () => opts.secrets ?? [],
@@ -171,6 +174,8 @@ export function makeHarness(steps: Step[] = [], opts: { baseDir?: string; platfo
   let seq = 0;
   return {
     platform, rt, llm, settings, baseDir, approvals, mcp,
+    get lang() { return state.lang; },
+    set lang(v) { state.lang = v; },
     async run(text, o = {}) {
       const requestId = `t${++seq}-${Date.now().toString(36)}`;
       const res: RunResult = { events: [], pet: [], confirms: [] };

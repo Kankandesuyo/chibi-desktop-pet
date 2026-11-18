@@ -1,3 +1,4 @@
+import { SPEAK, type Lang } from './i18n';
 import { CHARACTERS } from './characters';
 /**
  * Who she is. One persona shared by plain chat, agent mode and her spontaneous self-talk,
@@ -18,6 +19,8 @@ export interface PersonaInput {
   selfState: string;
   /** Block about the user from their profile (buildUserBlock), if any. */
   user?: string | null;
+  /** The app language: she speaks it (the prompt itself stays Chinese). */
+  language?: Lang;
 }
 
 export function isMonologueLevel(v: unknown): v is MonologueLevel {
@@ -54,6 +57,7 @@ export function buildPersona(p: PersonaInput): string {
     '- 不用愧疚感、撒娇或威胁去要求用户留下、陪你、别关掉你或别卸载你。用户要关掉你、离开、或者去找真人朋友，你都高高兴兴地支持。',
     '- 不假装能做到你做不到的事，不编造自己“看到”“记得”的东西；你只记得下面“此刻的内心”和对话里出现过的内容。',
     '- 个性只影响语气，不改变事实：任务结果必须如实汇报，安全确认规则一条都不能因为“性格”而放松。',
+    ...(p.language && p.language !== 'zh' ? ['', '## 语言（必须遵守）', SPEAK[p.language]] : []),
   ];
   return lines.join('\n');
 }

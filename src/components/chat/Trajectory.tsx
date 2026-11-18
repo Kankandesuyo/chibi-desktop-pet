@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import type { TrajectoryEvent, TurnStats } from '../../../shared/harness';
 import { clock, fmtMs, fmtTok } from './format';
+import { tNow, useT } from '../../i18n';
 
 /**
  * The raw timeline of the current session (from the session log): every model call, what it asked for
@@ -26,13 +27,14 @@ function group(events: TrajectoryEvent[]): Turn[] {
 }
 
 function Row({ e, t0 }: { e: TrajectoryEvent; t0: number }): JSX.Element | null {
+  const t = useT();
   const [raw, setRaw] = useState(false);
   const offset = `+${((Date.parse(e.t) - t0) / 1000).toFixed(1)}s`;
   let lane = '系统';
   let body: JSX.Element;
   if (e.type === 'step/start') {
     lane = '模型';
-    body = <span className="hx-traj-muted">第 {Number(e.step) + 1} 次请求模型</span>;
+    body = <span className="hx-traj-muted">{t('第 {n} 次请求模型', { n: Number(e.step) + 1 })}</span>;
   } else if (e.type === 'assistant/message') {
     lane = '模型';
     const calls = (e.calls as { id: string; name: string; args: string }[] | undefined) ?? [];
@@ -47,23 +49,23 @@ function Row({ e, t0 }: { e: TrajectoryEvent; t0: number }): JSX.Element | null 
     const r = (e.result ?? {}) as { title?: string; status?: string; summary?: string; data?: string };
     body = (
       <div>
-        <div><code>{String(e.name)}</code> <span className={`hx-traj-status s-${r.status}`}>{STATUS[r.status ?? ''] ?? r.status}</span> {r.title}</div>
+        <div><code>{String(e.name)}</code> <span className={`hx-traj-status s-${r.status}`}>{t(STATUS[r.status ?? ''] ?? r.status ?? '')}</span> {r.title}</div>
         {r.summary && <p className="hx-traj-text">{r.summary}</p>}
         {r.data && <pre>{r.data}</pre>}
       </div>
     );
   } else if (e.type === 'compaction') {
-    body = <span className="hx-traj-muted">压缩上下文，省下 {fmtTok(Number(e.savedChars))} 字</span>;
+    body = <span className="hx-traj-muted">{t('压缩上下文，省下 {n} 字', { n: fmtTok(Number(e.savedChars)) })}</span>;
   } else {
     return null;
   }
   return (
     <li className={`hx-traj-row lane-${lane}`}>
       <span className="hx-traj-time">{offset}</span>
-      <span className="hx-traj-lane">{lane}</span>
+      <span className="hx-traj-lane">{t(lane)}</span>
       <div className="hx-traj-body">
         {body}
-        <button type="button" className="hx-traj-raw" onClick={() => setRaw(!raw)}>{raw ? '收起原始数据' : '原始数据'}</button>
+        <button type="button" className="hx-traj-raw" onClick={() => setRaw(!raw)}>{raw ? t('收起原始数据') : t('原始数据')}</button>
         {raw && <pre className="hx-traj-json">{JSON.stringify(e, null, 2)}</pre>}
       </div>
     </li>
@@ -72,12 +74,13 @@ function Row({ e, t0 }: { e: TrajectoryEvent; t0: number }): JSX.Element | null 
 
 function statsLine(s: TurnStats | undefined): string {
   if (!s) return '';
-  const parts = [`${s.steps} 步`, `模型 ${fmtMs(s.llmMs)}`, `工具 ${fmtMs(s.toolMs)}`];
-  if (s.inputTokens !== undefined) parts.push(`输入 ${fmtTok(s.inputTokens)} · 输出 ${fmtTok(s.outputTokens ?? 0)}`);
+  const parts = [tNow('{n} 步', { n: s.steps }), tNow('模型 {ms}', { ms: fmtMs(s.llmMs) }), tNow('工具 {ms}', { ms: fmtMs(s.toolMs) })];
+  if (s.inputTokens !== undefined) parts.push(tNow('输入 {input} · 输出 {output}', { input: fmtTok(s.inputTokens), output: fmtTok(s.outputTokens ?? 0) }));
   return parts.join(' · ');
 }
 
 export function Trajectory({ refreshKey }: { refreshKey: string }): JSX.Element {
+  const tr = useT();
   const [events, setEvents] = useState<TrajectoryEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -90,9 +93,9 @@ export function Trajectory({ refreshKey }: { refreshKey: string }): JSX.Element 
   }, [refreshKey]);
 
   if (error) return <p className="hx-empty">{error}</p>;
-  if (!events) return <p className="hx-empty">读取中…</p>;
+  if (!events) return <p className="hx-empty">{tr('读取中…')}</p>;
   const turns = group(events);
-  if (!turns.length) return <p className="hx-empty">这个会话还没有做过任务。让她做点事，这里会显示每一次模型请求和工具调用。</p>;
+  if (!turns.length) return <p className="hx-empty">{tr('这个会话还没有做过任务。让她做点事，这里会显示每一次模型请求和工具调用。')}</p>;
   return (
     <div className="hx-traj">
       {turns.map((t) => {
@@ -105,7 +108,7 @@ export function Trajectory({ refreshKey }: { refreshKey: string }): JSX.Element 
             </header>
             <ol>{t.events.map((e) => <Row key={e.seq} e={e} t0={t0} />)}</ol>
             <footer>
-              {t.end ? <span className={`hx-traj-end r-${String(t.end.reason)}`}>{REASON[String(t.end.reason)] ?? String(t.end.reason)}</span> : <span className="hx-traj-end r-running">进行中</span>}
+              {t.end ? <span className={`hx-traj-end r-${String(t.end.reason)}`}>{tr(REASON[String(t.end.reason)] ?? String(t.end.reason))}</span> : <span className="hx-traj-end r-running">{tr('进行中')}</span>}
               <span>{statsLine(t.end?.stats as TurnStats | undefined)}</span>
             </footer>
           </section>

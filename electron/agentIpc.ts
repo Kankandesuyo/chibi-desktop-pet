@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { dialog, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import type { AgentEvent, AgentInfo, AgentManageResult, ConfirmDecision } from '../shared/agentTypes';
 import { IPC } from '../shared/constants';
+import { translate } from '../shared/i18n';
 import { dropActions, dropHeader } from '../shared/fileDrop';
 import { inspectDrop } from './fileDrop';
 import type { AgentSettingsPatch, Settings } from '../shared/types';
@@ -96,7 +97,7 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
     }
   }, () => ({ ok: false, error: '不可用' }));
   handle<string | null>(IPC.agentPickFolder, async () => {
-    const r = await dialog.showOpenDialog({ title: '选择允许桌宠操作的文件夹', properties: ['openDirectory'] });
+    const r = await dialog.showOpenDialog({ title: translate(config.getSettings().language, '选择允许桌宠操作的文件夹'), properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0] ?? null;
   }, () => null);
   handle<AgentInfo>(IPC.agentPlugins, async (op) => {
@@ -120,18 +121,19 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
     const busy = agent.controller.isRunning();
     const outside = drop.items.filter((i) => !i.allowed).length;
     const actions = dropActions(drop);
-    const note = (label: string): MenuItemConstructorOptions => ({ label, enabled: false });
+    const L = (zh: string, vars?: Record<string, string | number>): string => translate(s.language, zh, vars);
+    const note = (label: string): MenuItemConstructorOptions => ({ label: L(label), enabled: false });
     const template: MenuItemConstructorOptions[] = [note(dropHeader(drop)), { type: 'separator' }];
     if (!ready) {
-      template.push(note('要先在设置里打开 AI 和智能体模式'), { label: '打开设置…', click: () => windows.openPanel('settings') });
+      template.push(note('要先在设置里打开 AI 和智能体模式'), { label: L('打开设置…'), click: () => windows.openPanel('settings') });
     } else if (actions.length === 0) {
-      template.push(note('这些不在允许的文件夹里，她碰不到'), { label: '去设置里添加文件夹…', click: () => windows.openPanel('settings') });
+      template.push(note('这些不在允许的文件夹里，她碰不到'), { label: L('去设置里添加文件夹…'), click: () => windows.openPanel('settings') });
     } else {
-      if (outside) template.push(note(`有 ${outside} 个不在允许的文件夹里，先不管它们`));
+      if (outside) template.push({ label: L('有 {n} 个不在允许的文件夹里，先不管它们', { n: outside }), enabled: false });
       if (busy) template.push(note('她还在忙上一个任务，可以先告诉她要做什么'));
       for (const a of actions) {
         const startsNow = a.compose.prompt !== undefined;
-        template.push({ label: a.label, enabled: !(busy && startsNow), click: () => windows.composeInChat(a.compose) });
+        template.push({ label: L(a.label), enabled: !(busy && startsNow), click: () => windows.composeInChat(a.compose) });
       }
     }
     Menu.buildFromTemplate(template).popup({ window: windows.pet ?? undefined });

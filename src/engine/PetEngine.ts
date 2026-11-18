@@ -3,6 +3,7 @@ import { Application } from 'pixi.js';
 import { FOOT_MARGIN } from '../../shared/constants';
 import type { Emotion, InitialData, PetAction, PetAPI, PetNotice, PetState, PointRequest, Settings } from '../../shared/types';
 import { LINES, TUNING, pick } from '../config/petConfig';
+import { tNow } from '../i18n';
 import { AnimationController, type IdleVariant } from './AnimationController';
 import { BehaviorScheduler } from './BehaviorScheduler';
 import { BlinkController } from './BlinkController';
@@ -379,7 +380,7 @@ export class PetEngine implements InteractionHost {
     if (!p) return;
     this.movement.facing = p.target.point.x < this.movement.pos.x ? 'left' : 'right';
     this.machine.force('pointing');
-    const what = p.target.label ? `「${p.target.label}」在这里！` : '在这里！';
+    const what = p.target.label ? tNow('「{label}」在这里！', { label: p.target.label }) : tNow('在这里！');
     const note = p.target.note.length > 40 ? `${p.target.note.slice(0, 39)}…` : p.target.note;
     this.hooks.say(`${what}${note}`, 5000);
     this.pointing = null;

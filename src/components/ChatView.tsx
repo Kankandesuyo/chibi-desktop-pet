@@ -10,6 +10,7 @@ import { Composer, type PermissionMode } from './chat/Composer';
 import { StatsBar } from './chat/StatsBar';
 import { PermissionCard, PlanBox, ToolRows } from './chat/ToolRows';
 import { Trajectory } from './chat/Trajectory';
+import { useT } from '../i18n';
 
 export function modeOf(s: Settings): ChatMode {
   return !(s.aiEnabled && s.ai.hasApiKey) ? 'offline' : s.agent.enabled ? 'agent' : 'chat';
@@ -54,7 +55,8 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, c
   const [tab, setTab] = useState<'chat' | 'trajectory'>('chat');
   const mode: ChatMode = modeOf(settings);
   const working = requestId !== null;
-  const name = settings.petName || '她';
+  const t = useT();
+  const name = settings.petName || t('她');
   const wantedRef = useRef(onWanted);
   wantedRef.current = onWanted;
 
@@ -69,7 +71,7 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, c
       }
       // Needs the user's words (or she is busy / agent mode is off): attach and let them type.
       setAttached(c.paths);
-      setHint(c.prompt ? (chat.requestId ? '她还在忙上一个任务，等她做完再发' : '要先在设置里打开 AI 和智能体模式') : c.hint ?? null);
+      setHint(c.prompt ? (chat.requestId ? t('她还在忙上一个任务，等她做完再发') : t('要先在设置里打开 AI 和智能体模式')) : c.hint ? t(c.hint) : null);
       inputRef.current?.focus();
     };
     const takeCompose = (): void => { void window.petAPI.takeChatCompose().then(applyCompose); };
@@ -128,14 +130,14 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, c
     void window.petAPI.agentUpdateSettings({ readOnly: m === 'readonly', autoApproveMedium: m === 'auto' }).then((s) => useSettingsStore.getState().apply(s));
   };
 
-  const badge = mode === 'offline' ? '离线' : mode === 'agent' ? '智能体' : '聊天';
+  const badge = mode === 'offline' ? t('离线') : mode === 'agent' ? t('智能体') : t('聊天');
   const liveSteps = steps.filter((s) => s.tool !== 'update_plan');
-  const placeholder = hint ?? (mode === 'agent' ? `和${name}说点什么，或让她帮你做事…（输入 / 用命令）` : mode === 'chat' ? `和${name}说点什么…` : '输入消息，回车发送');
+  const placeholder = hint ?? (mode === 'agent' ? t('和{name}说点什么，或让她帮你做事…（输入 / 用命令）', { name }) : mode === 'chat' ? t('和{name}说点什么…', { name }) : t('输入消息，回车发送'));
   const firstUser = messages.find((m) => m.role === 'user')?.content.split('\n')[0] ?? '';
-  const title = sessionTitle ?? (firstUser ? firstUser.slice(0, 60) : '新会话');
+  const title = sessionTitle ? t(sessionTitle) : (firstUser ? firstUser.slice(0, 60) : t('新会话'));  // t(): the untitled default comes from the main process in Chinese
   const userFace = userAvatar
     ? <img src={userAvatar} alt="" className="hx-avatar small" />
-    : <span className="hx-avatar small hx-avatar-letter">{(settings.profile.displayName || settings.profile.callMe || '我').slice(0, 1)}</span>;
+    : <span className="hx-avatar small hx-avatar-letter">{(settings.profile.displayName || settings.profile.callMe || t('我')).slice(0, 1)}</span>;
 
   return (
     <section className="page page-chat" hidden={!active}>
@@ -144,8 +146,8 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, c
         <span className={`hx-badge b-${mode}`}>{badge}</span>
         {project}
         <nav className="hx-tabs">
-          <button type="button" className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>对话</button>
-          <button type="button" className={tab === 'trajectory' ? 'on' : ''} onClick={() => setTab('trajectory')} title="每一次模型请求和工具调用的原始记录">轨迹</button>
+          <button type="button" className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>{t('对话')}</button>
+          <button type="button" className={tab === 'trajectory' ? 'on' : ''} onClick={() => setTab('trajectory')} title={t('每一次模型请求和工具调用的原始记录')}>{t('轨迹')}</button>
         </nav>
         {controls}
       </header>
@@ -157,13 +159,13 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, c
           <div className="hx-thread">
             {messages.length === 0 && !working && (
               <div className="hx-welcome code">
-                <WelcomeAvatar key={settings.character + avatar} character={settings.character} avatar={avatar} name={name} t={(s) => s} />
+                <WelcomeAvatar key={settings.character + avatar} character={settings.character} avatar={avatar} name={name} t={t} />
                 <WelcomeGreeting callMe={settings.profile.callMe} displayName={settings.profile.displayName} />
-                {codeMode && projectName && <p>{`${name}会在这个项目文件夹里读代码、改代码；删除文件和运行命令会先问你。`}</p>}
-                {!codeMode && mode === 'offline' && <p>{'还没有配置 AI：现在是离线模式，她只会说几句简单的话。在“设置 → AI 聊天”里填好 API 就能真正聊天。'}</p>}
+                {codeMode && projectName && <p>{t('{name}会在这个项目文件夹里读代码、改代码；删除文件和运行命令会先问你。', { name })}</p>}
+                {!codeMode && mode === 'offline' && <p>{t('还没有配置 AI：现在是离线模式，她只会说几句简单的话。在“设置 → AI 聊天”里填好 API 就能真正聊天。')}</p>}
                 {!codeMode && mode === 'agent' && (
                   <div className="hx-suggest">
-                    {['在桌面建一个叫 AI项目 的文件夹', '帮我找昨天下载的 PDF', '看看我的电脑现在卡不卡', '每天早上 9 点帮我看看下载文件夹'].map((s) => (
+                    {[t('在桌面建一个叫 AI项目 的文件夹'), t('帮我找昨天下载的 PDF'), t('看看我的电脑现在卡不卡'), t('每天早上 9 点帮我看看下载文件夹')].map((s) => (
                       <button key={s} type="button" onClick={() => { setText(s); inputRef.current?.focus(); }}>{s}</button>
                     ))}
                   </div>

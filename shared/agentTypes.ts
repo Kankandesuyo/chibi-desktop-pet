@@ -29,8 +29,6 @@ export interface AgentSettings {
   maxSteps: number;
   /** The model's context window in tokens: long tasks are compacted before they reach it. */
   contextWindow: number;
-  /** Language she uses in project (code) conversations: replies, code comments, commit messages. */
-  projectLanguage: ProjectLanguage;
   vision: { baseUrl: string; model: string; hasApiKey: boolean };
 }
 

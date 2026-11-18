@@ -39,7 +39,7 @@ const DEFAULT_AGENT: StoredAgent = {
   settings: {
     enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true,
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
-    toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW, projectLanguage: 'zh', vision: { baseUrl: '', model: '' },
+    toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW, vision: { baseUrl: '', model: '' },
   },
   visionKeyEncrypted: '', visionKeyPlain: '', approvals: {}, mcpServers: [],
 };
@@ -49,7 +49,7 @@ const DEFAULTS: StoredConfig = {
     size: 0.6, opacity: 1, speed: 1, autoMoveFrequency: 0.5, autoMove: true, allowDrag: true, gravity: false,
     alwaysOnTop: true, sound: false, aiEnabled: false, launchAtLogin: false, globalHotkey: DEFAULT_HOTKEY,
     petName: DEFAULT_PET_NAME, personaTraits: '', monologue: 'normal', character: DEFAULT_CHARACTER, theme: 'auto',
-    uiMode: 'system', profile: DEFAULT_PROFILE,
+    uiMode: 'system', language: 'zh', profile: DEFAULT_PROFILE,
   },
   ai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKeyEncrypted: '', apiKeyPlain: '' },
   stats: { mood: 'neutral', affection: 30, energy: 80, interactionCount: 0 },
@@ -98,6 +98,7 @@ export function sanitizeSettings(input: unknown, base: CoreSettings): CoreSettin
     personaTraits: cleanTraits(s.personaTraits, base.personaTraits),
     monologue: isMonologueLevel(s.monologue) ? s.monologue : base.monologue,
     uiMode: s.uiMode === 'light' || s.uiMode === 'dark' || s.uiMode === 'system' ? s.uiMode : base.uiMode,
+    language: s.language === 'zh' || s.language === 'en' || s.language === 'ja' ? s.language : (base.language ?? 'zh'),
     profile: sanitizeProfile(s.profile, base.profile ?? DEFAULT_PROFILE),
   };
 }
@@ -118,7 +119,6 @@ export function sanitizeAgentSettings(input: unknown, base: StoredAgentSettings)
     toolProtocol: s.toolProtocol === 'native' || s.toolProtocol === 'json' || s.toolProtocol === 'auto' ? s.toolProtocol : base.toolProtocol,
     maxSteps: Math.round(num(s.maxSteps, 3, 60, base.maxSteps)),
     contextWindow: Math.round(num(s.contextWindow, 8000, 2000000, base.contextWindow ?? DEFAULT_CONTEXT_WINDOW)),
-    projectLanguage: s.projectLanguage === 'zh' || s.projectLanguage === 'en' || s.projectLanguage === 'ja' ? s.projectLanguage : (base.projectLanguage ?? 'zh'),
     vision: { baseUrl: str(vision.baseUrl, base.vision.baseUrl).trim(), model: str(vision.model, base.vision.model, 100).trim() },
   };
 }

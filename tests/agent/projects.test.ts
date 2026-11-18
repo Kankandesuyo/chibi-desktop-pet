@@ -106,11 +106,14 @@ describe('project mode', () => {
     expect(system).toContain(project);
   });
 
-  it('uses the project language from settings', async () => {
-    setup([say('OK')]);
-    h!.settings.projectLanguage = 'en';
+  it('speaks the app language', async () => {
+    setup([say('OK'), say('はい')]);
+    h!.lang = 'en';
     await h!.run('hi');
-    expect(String(h!.llm.requests[0]?.messages[0]?.content)).toContain('Reply and report in English');
+    expect(String(h!.llm.requests[0]?.messages[0]?.content)).toContain('Always speak to the user in English');
+    h!.lang = 'ja';
+    await h!.run('こんにちは');
+    expect(String(h!.llm.requests[1]?.messages[0]?.content)).toContain('日本語で話すこと');
   });
 
   it('outside the project, editing an existing file still asks', async () => {

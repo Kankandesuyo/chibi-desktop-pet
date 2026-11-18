@@ -20,6 +20,7 @@ import { Monologue } from './monologue';
 import { SelfModel } from './selfModel';
 import { openClaudeDesktop, registerIpcHandlers, type PetLife } from './ipcHandlers';
 import { WindowManager } from './windowManager';
+import { translate, type Lang } from '../shared/i18n';
 import { registerUpdater, updateStatus } from './updater';
 
 // Serve the built renderer from app://local/ instead of file:// so that fetch, canvas pixel reads
@@ -71,20 +72,21 @@ function applyCharacterIcon(windows: WindowManager, character: CharacterId): voi
   windows.setIcon(icon);
 }
 
-function createTray(windows: WindowManager, quit: () => void, character: CharacterId): void {
+function createTray(windows: WindowManager, quit: () => void, character: CharacterId, lang: () => Lang = () => 'zh'): void {
   const icon = characterIcon(character);
   if (icon.isEmpty()) return;                                   // no tray rather than a crash
   tray = new Tray(icon.resize({ width: 20, height: 20 }));
   tray.setToolTip('Chibi Desktop Pet');
   const rebuild = (): void => {
+    const L = (zh: string): string => translate(lang(), zh);
     tray?.setContextMenu(Menu.buildFromTemplate([
-      { label: windows.isPetVisible() ? '隐藏桌宠' : '显示桌宠', click: () => { windows.setPetVisible(!windows.isPetVisible()); rebuild(); } },
-      { label: '聊天', click: () => windows.openPanel('chat') },
-      { label: '打开 Claude 桌面版', click: () => { void openClaudeDesktop(); } },
-      { label: '设置…', click: () => windows.openPanel('settings') },
-      ...(updateStatus().ready ? [{ label: '⬆ 安装新版本并重启', click: () => installUpdate() }] : []),
+      { label: windows.isPetVisible() ? L('隐藏桌宠') : L('显示桌宠'), click: () => { windows.setPetVisible(!windows.isPetVisible()); rebuild(); } },
+      { label: L('聊天'), click: () => windows.openPanel('chat') },
+      { label: L('打开 Claude 桌面版'), click: () => { void openClaudeDesktop(); } },
+      { label: L('设置…'), click: () => windows.openPanel('settings') },
+      ...(updateStatus().ready ? [{ label: L('⬆ 安装新版本并重启'), click: () => installUpdate() }] : []),
       { type: 'separator' },
-      { label: '退出程序', click: quit },
+      { label: L('退出程序'), click: quit },
     ]));
   };
   rebuildTray = rebuild;
@@ -109,7 +111,7 @@ if (!app.requestSingleInstanceLock()) {
     const self = new SelfModel(path.join(app.getPath('userData'), 'self.json'));
     const persona = (): string => {
       const s = config.getSettings();
-      return buildPersona({ name: s.petName, appearance: characterMeta(s.character, characters.list()).appearance, traits: s.personaTraits, selfState: self.summary(), user: buildUserBlock(s.profile) });
+      return buildPersona({ name: s.petName, appearance: characterMeta(s.character, characters.list()).appearance, traits: s.personaTraits, selfState: self.summary(), user: buildUserBlock(s.profile), language: s.language });
     };
     const activity = { streaming: 0 };
     const life: PetLife = { self, persona, activity, characters };
@@ -123,6 +125,7 @@ if (!app.requestSingleInstanceLock()) {
       platform: createElectronPlatform(),
       llm: new OpenAiCompatibleClient(() => ({ ...config.getAiEndpoint(), apiKey: config.getApiKey() })),
       settings: () => config.getAgentSettings(),
+      language: () => config.getSettings().language,
       vision: async (png, question, signal, options) => {
         const ep = config.getVisionEndpoint();
         if (!ep.model) throw new Error('还没有配置视觉模型（设置 → 智能体 → 视觉模型）。普通文本模型看不懂图片。');
@@ -161,7 +164,7 @@ if (!app.requestSingleInstanceLock()) {
     app.on('will-quit', () => clearInterval(scheduleTimer));
     agent.onScheduledDone((task, text, ok) => {
       if (!Notification.isSupported()) return;
-      const n = new Notification({ title: `⏰ ${task.name}${ok ? '' : '（没有完成）'}`, body: text.slice(0, 160), icon: characterIcon(config.getSettings().character), silent: inQuietHours(config.getSettings().profile) });
+      const n = new Notification({ title: `⏰ ${task.name}${ok ? '' : translate(config.getSettings().language, '（没有完成）')}`, body: text.slice(0, 160), icon: characterIcon(config.getSettings().character), silent: inQuietHours(config.getSettings().profile) });
       n.on('click', () => { windows.setPetVisible(true); windows.focusChat(); });
       n.show();
     });
@@ -186,7 +189,7 @@ if (!app.requestSingleInstanceLock()) {
     app.on('second-instance', () => windows.setPetVisible(true));
     windows.applyUiMode();
     windows.createPetWindow();
-    createTray(windows, quit, config.getSettings().character);
+    createTray(windows, quit, config.getSettings().character, () => config.getSettings().language);
     installUpdate = registerUpdater((ch, p) => windows.broadcast(ch, p), quit, () => rebuildTray());
     // The chat window shows her face next to her replies (it follows the chosen character).
     ipcMain.handle('pet:avatar', (e) => {

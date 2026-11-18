@@ -2,6 +2,7 @@ import { useEffect, useRef, type JSX } from 'react';
 import { PetEngine } from '../engine/PetEngine';
 import { usePetStore } from '../store/petStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { tNow } from '../i18n';
 
 /** The transparent pet window: a canvas driven by PetEngine plus a small speech bubble. */
 export function PetView(): JSX.Element {
@@ -21,7 +22,7 @@ export function PetView(): JSX.Element {
       const store = usePetStore.getState();
       store.setStats(initial.stats);
       engine = new PetEngine(window.petAPI, {
-        onReady: store.setReady, onStats: store.setStats, say: store.say,
+        onReady: store.setReady, onStats: store.setStats, say: (text: string, ms?: number) => store.say(tNow(text), ms),  // fixed lines are translated; her own words pass through
         // also mirrored on <body data-pet-state> so it can be inspected in DevTools and by the smoke test
         onState: (state) => { store.setState(state); document.body.dataset.petState = state; },
       }, initial);

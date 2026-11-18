@@ -73,6 +73,8 @@ export interface Settings {
   monologue: MonologueLevel;
   /** Light / dark look of the main window ('system' follows Windows). */
   uiMode: UiMode;
+  /** Language of the whole app — and the one she speaks. */
+  language: import('./i18n').Lang;
   /** The local user's profile (我的资料). */
   profile: UserProfile;
   ai: AiPublicConfig;
@@ -211,7 +213,7 @@ export interface PetAPI {
   sessionNew(): Promise<{ ok: true; id: string } | { error: string }>;
   sessionRename(id: string, name: string): Promise<{ ok: true } | { error: string }>;
   sessionPin(id: string, pinned: boolean): Promise<{ ok: true } | { error: string }>;
-  /** Moves the conversation to sessions/trash/; deleting the open one opens the newest other one. */
+  /** Permanently deletes the conversation log; deleting the open one opens the newest other one. */
   sessionDelete(id: string): Promise<{ ok: true; id: string } | { error: string }>;
   /** Binds the open conversation (fresh = start a new one first) to a project folder; null unbinds it. */
   sessionProject(folder: string | null, fresh?: boolean): Promise<{ ok: true; id: string; project: string | null } | { error: string }>;

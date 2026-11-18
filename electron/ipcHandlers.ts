@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { isEmotion, isPetAction } from '../shared/aiProtocol';
 import { canEat } from '../shared/characters';
 import { IPC } from '../shared/constants';
+import { translate } from '../shared/i18n';
 import type { AiStreamEvent, InitialData, MenuCommand, PetAction, Point } from '../shared/types';
 import { streamChat } from './aiClient';
 import { sanitizeHistory, sanitizeStats, type ConfigStore } from './configStore';
@@ -117,6 +118,7 @@ export function registerIpcHandlers(config: ConfigStore, windows: WindowManager,
 
   on(IPC.showContextMenu, () => {
     const s = config.getSettings();
+    const L = (zh: string): string => translate(s.language, zh);
     const send = (cmd: MenuCommand): void => windows.sendToPet(IPC.menuCommand, cmd);
     const toggle = (key: 'autoMove' | 'alwaysOnTop' | 'sound' | 'gravity', invert = false): MenuItemConstructorOptions => ({
       type: 'checkbox',
@@ -124,29 +126,29 @@ export function registerIpcHandlers(config: ConfigStore, windows: WindowManager,
       click: () => { config.updateSettings({ [key]: !s[key] }); applySettings(); },
     });
     const template: MenuItemConstructorOptions[] = [
-      { label: '聊天', click: () => windows.openPanel('chat') },
+      { label: L('聊天'), click: () => windows.openPanel('chat') },
       {
-        label: '切换动作',
+        label: L('切换动作'),
         submenu: [...ACTION_LABELS, ...(canEat(s.character, life?.characters?.list()) ? [['吃饭', 'eat'] as [string, PetAction]] : [])]
-          .map(([label, action]) => ({ label, click: () => send({ type: 'action', action }) })),
+          .map(([label, action]) => ({ label: L(label), click: () => send({ type: 'action', action }) })),
       },
       {
-        label: '调整大小',
+        label: L('调整大小'),
         submenu: SIZE_PRESETS.map(([label, size]) => ({
-          label, type: 'radio', checked: Math.abs(s.size - size) < 0.02,
+          label: L(label), type: 'radio', checked: Math.abs(s.size - size) < 0.02,
           click: () => { config.updateSettings({ size }); applySettings(); },
         })),
       },
-      { label: '暂停自动移动', ...toggle('autoMove', true) },
-      { label: '松手后掉到底部', ...toggle('gravity') },
-      { label: '始终置顶', ...toggle('alwaysOnTop') },
-      { label: '音效', ...toggle('sound') },
+      { label: L('暂停自动移动'), ...toggle('autoMove', true) },
+      { label: L('松手后掉到底部'), ...toggle('gravity') },
+      { label: L('始终置顶'), ...toggle('alwaysOnTop') },
+      { label: L('音效'), ...toggle('sound') },
       { type: 'separator' },
-      { label: '打开 Claude 桌面版', click: () => { void openClaudeDesktop(); } },
-      { label: '设置…', click: () => windows.openPanel('settings') },
-      { label: '隐藏桌宠', click: () => windows.setPetVisible(false) },
+      { label: L('打开 Claude 桌面版'), click: () => { void openClaudeDesktop(); } },
+      { label: L('设置…'), click: () => windows.openPanel('settings') },
+      { label: L('隐藏桌宠'), click: () => windows.setPetVisible(false) },
       { type: 'separator' },
-      { label: '退出程序', click: quit },
+      { label: L('退出程序'), click: quit },
     ];
     Menu.buildFromTemplate(template).popup({ window: windows.pet ?? undefined });
   });

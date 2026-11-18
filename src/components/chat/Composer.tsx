@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type JSX, type KeyboardEvent, type RefObject } from 'react';
 import { SLASH_COMMANDS } from '../../../shared/harness';
 import { baseName } from './format';
+import { useT } from '../../i18n';
 
 export type PermissionMode = 'ask' | 'auto' | 'readonly';
 
@@ -28,6 +29,7 @@ interface Props {
 
 /** The input area: attachments, slash-command completion, permission mode, send / stop. */
 export function Composer(p: Props): JSX.Element {
+  const t = useT();
   const [sel, setSel] = useState(0);
   const [modeOpen, setModeOpen] = useState(false);
   const modeRef = useRef<HTMLDivElement>(null);
@@ -66,8 +68,8 @@ export function Composer(p: Props): JSX.Element {
       )}
       {p.attached.length > 0 && (
         <div className="hx-attach" title={p.attached.join('\n')}>
-          <span>📎 {p.attached.length === 1 ? baseName(p.attached[0] as string) : `${baseName(p.attached[0] as string)} 等 ${p.attached.length} 个`}</span>
-          <button type="button" onClick={p.onClearAttached} title="不带这些文件">×</button>
+          <span>📎 {p.attached.length === 1 ? baseName(p.attached[0] as string) : t('{first} 等 {count} 个', { first: baseName(p.attached[0] as string), count: p.attached.length })}</span>
+          <button type="button" onClick={p.onClearAttached} title={t('不带这些文件')}>×</button>
         </div>
       )}
       <div className="hx-input-row">
@@ -88,26 +90,26 @@ export function Composer(p: Props): JSX.Element {
                     onClick={() => { p.onPermission(m); setModeOpen(false); p.inputRef.current?.focus(); }}
                   >
                     <span className="hx-mode-dot" />
-                    <span className="hx-mode-text"><b>{PERMISSION_LABEL[m]}</b><small>{PERMISSION_HINT[m]}</small></span>
+                    <span className="hx-mode-text"><b>{t(PERMISSION_LABEL[m])}</b><small>{t(PERMISSION_HINT[m])}</small></span>
                     {m === p.permission && <span className="hx-mode-check">✓</span>}
                   </button>
                 ))}
               </div>
             )}
             <button
-              type="button" className={`hx-mode hx-mode-${p.permission}${modeOpen ? ' open' : ''}`} title={PERMISSION_HINT[p.permission]}
+              type="button" className={`hx-mode hx-mode-${p.permission}${modeOpen ? ' open' : ''}`} title={t(PERMISSION_HINT[p.permission])}
               onClick={() => setModeOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={modeOpen}
             >
               <span className="hx-mode-dot" />
-              <span>{PERMISSION_LABEL[p.permission]}</span>
+              <span>{t(PERMISSION_LABEL[p.permission])}</span>
               <span className="hx-mode-caret">{modeOpen ? '▾' : '▴'}</span>
             </button>
           </div>
         )}
-        <span className="hx-composer-tip">/ 命令 · 拖文件到她身上</span>
+        <span className="hx-composer-tip">{t('/ 命令 · 拖文件到她身上')}</span>
         {p.working
-          ? <button type="button" className="hx-send stop" onClick={p.onStop}>停止</button>
-          : <button type="submit" className="hx-send" disabled={!p.text.trim()}>发送</button>}
+          ? <button type="button" className="hx-send stop" onClick={p.onStop}>{t('停止')}</button>
+          : <button type="submit" className="hx-send" disabled={!p.text.trim()}>{t('发送')}</button>}
       </div>
     </form>
   );

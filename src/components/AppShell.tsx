@@ -9,6 +9,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SchedulesPage } from './pages/SchedulesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SkillsPage } from './pages/SkillsPage';
+import { useT } from '../i18n';
 
 export type Page = 'chat' | 'schedules' | 'skills' | 'profile' | 'settings';
 const PAGES: readonly Page[] = ['chat', 'schedules', 'skills', 'profile', 'settings'];
@@ -56,7 +57,7 @@ const Caret = ({ open }: { open: boolean }): JSX.Element => (
  * window buttons sit over the top-right corner of the page header.
  */
 export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
-  const t = (text: string) => text;
+  const t = useT();
   const [page, setPage] = useState<Page>(initialPage);
   const [menu, setMenu] = useState(false);
   const [navMode, setNavModeState] = useState<NavMode>(() => load<NavMode>('nav.mode', 'chat'));
@@ -84,7 +85,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const [userAvatar, setUserAvatar] = useState('');
   const [panel, setPanel] = useState<PanelState>({ pinned: false, fullscreen: false, maximized: false });
   const busy = requestId !== null;
-  const name = settings.petName || '她';
+  const name = settings.petName || t('她');
 
   const control = (a: PanelAction): void => { void window.petAPI.panelControl(a).then((s) => { if (s) setPanel(s); }); };
   const refreshSessions = useCallback((): void => {
@@ -134,9 +135,9 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     return () => window.removeEventListener('mousedown', off);
   }, [pickOpen]);
   const installUpdate = (): void => {
-    if (useChatStore.getState().requestId && !window.confirm('她正在做事，现在更新会打断她。仍然更新并重启吗？')) return;
+    if (useChatStore.getState().requestId && !window.confirm(t('她正在做事，现在更新会打断她。仍然更新并重启吗？'))) return;
     setInstalling(true);
-    void window.petAPI.updateApply().then((r) => { if (!r.ok) { setInstalling(false); useChatStore.setState({ notice: `更新失败：${r.error ?? '未知原因'}` }); } });
+    void window.petAPI.updateApply().then((r) => { if (!r.ok) { setInstalling(false); useChatStore.setState({ notice: t('更新失败：{error}', { error: r.error ?? t('未知原因') }) }); } });
   };
 
   // The list changes when the session changes, and a new session gets its title from its first message.
@@ -154,7 +155,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   };
   /** Picks a folder and opens a new conversation that works in it (fresh) — or rebinds the open one. */
   const chooseProject = async (fresh: boolean): Promise<void> => {
-    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: '她正在做事，做完再换项目' }); return; }
+    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: t('她正在做事，做完再换项目') }); return; }
     const folder = await window.petAPI.agentPickFolder();
     if (!folder) return;
     setPage('chat');
@@ -164,7 +165,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   /** From the strip above the input: work in this folder (the open conversation if it is still empty, else a new one). */
   const useProject = async (folder: string | null): Promise<void> => {
     setPickOpen(false);
-    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: '她正在做事，做完再换项目' }); return; }
+    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: t('她正在做事，做完再换项目') }); return; }
     if (!folder) folder = await window.petAPI.agentPickFolder();
     if (!folder) return;
     const fresh = useChatStore.getState().messages.length > 0;
@@ -173,7 +174,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   };
   const useComputer = async (): Promise<void> => {
     if (!currentProjectRef.current) return;
-    if (useChatStore.getState().messages.length > 0 && !window.confirm('这个对话不再绑定项目文件夹，改为在整台电脑上工作？')) return;
+    if (useChatStore.getState().messages.length > 0 && !window.confirm(t('这个对话不再绑定项目文件夹，改为在整台电脑上工作？'))) return;
     const id = useChatStore.getState().session?.id ?? null;
     if (report(await window.petAPI.sessionProject(null))) setCodeDraftId(id);
     refreshSessions();
@@ -181,7 +182,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
 
   /** A new conversation (thread) inside an existing project. */
   const newThread = async (folder: string): Promise<void> => {
-    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: '她正在做事，做完再开新对话' }); return; }
+    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: t('她正在做事，做完再开新对话') }); return; }
     setPage('chat');
     report(await window.petAPI.sessionProject(folder, true));
     refreshSessions();
@@ -189,7 +190,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const unbindProject = async (): Promise<void> => { report(await window.petAPI.sessionProject(null)); refreshSessions(); };
   const togglePin = async (s: SessionSummary): Promise<void> => { report(await window.petAPI.sessionPin(s.id, !s.pinned)); refreshSessions(); };
   const removeSession = async (s: SessionSummary): Promise<void> => {
-    if (!window.confirm(`删除会话「${s.title}」？\n\n该会话记录将被永久删除，此操作无法撤销。`)) return;
+    if (!window.confirm(t('删除会话「{title}」？\n\n该会话记录将被永久删除，此操作无法撤销。', { title: s.title }))) return;
     report(await window.petAPI.sessionDelete(s.id));
     refreshSessions();
   };
@@ -229,23 +230,23 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   // Above the input box in the code view: where she works — the whole computer, or a project folder.
   const codeStrip = navMode === 'code' ? (
     <div className="code-strip">
-      <button type="button" className={`code-strip-tab${currentProject ? '' : ' on'}`} onClick={() => void useComputer()} disabled={busy} title="不绑定项目，在整台电脑上工作">
-        <LaptopIcon /><span>这台电脑</span>
+      <button type="button" className={`code-strip-tab${currentProject ? '' : ' on'}`} onClick={() => void useComputer()} disabled={busy} title={t('不绑定项目，在整台电脑上工作')}>
+        <LaptopIcon /><span>{t('这台电脑')}</span>
       </button>
       <div className="code-strip-pick" ref={pickRef}>
-        <button type="button" className={`code-strip-tab${currentProject ? ' on' : ''}`} onClick={() => setPickOpen((o) => !o)} disabled={busy} title={currentProject ?? '选一个项目文件夹'} aria-haspopup="listbox" aria-expanded={pickOpen}>
-          <FolderIcon /><span className="code-strip-name">{currentProject ? projectLabel(currentProject) : '选择项目'}</span><Caret open={pickOpen} />
+        <button type="button" className={`code-strip-tab${currentProject ? ' on' : ''}`} onClick={() => setPickOpen((o) => !o)} disabled={busy} title={currentProject ?? t('选一个项目文件夹')} aria-haspopup="listbox" aria-expanded={pickOpen}>
+          <FolderIcon /><span className="code-strip-name">{currentProject ? projectLabel(currentProject) : t('选择项目')}</span><Caret open={pickOpen} />
         </button>
         {pickOpen && (
           <div className="code-strip-menu" role="listbox">
-            {recentProjects.length > 0 && <div className="code-strip-label">最近的项目</div>}
+            {recentProjects.length > 0 && <div className="code-strip-label">{t('最近的项目')}</div>}
             {recentProjects.map((f) => (
               <button key={f} type="button" role="option" aria-selected={f === currentProject} className={f === currentProject ? 'on' : ''} onClick={() => void useProject(f)} title={f}>
                 <FolderIcon /><span className="code-strip-item"><b>{projectLabel(f)}</b><small>{f}</small></span>
               </button>
             ))}
             {recentProjects.length > 0 && <hr />}
-            <button type="button" onClick={() => void useProject(null)}><span className="code-strip-plus">＋</span><span className="code-strip-item"><b>选择文件夹…</b><small>打开电脑上的任意文件夹作为项目</small></span></button>
+            <button type="button" onClick={() => void useProject(null)}><span className="code-strip-plus">＋</span><span className="code-strip-item"><b>{t('选择文件夹…')}</b><small>{t('打开电脑上的任意文件夹作为项目')}</small></span></button>
           </div>
         )}
       </div>
@@ -253,25 +254,25 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   ) : null;
   const projectChip = currentProject ? (
     <span className="project-chip" title={currentProject}>
-      <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n点一下在资源管理器里打开`}>📁 {projectLabel(currentProject)}</button>
-      <button type="button" className="project-chip-btn" onClick={() => void chooseProject(false)} disabled={busy} title="换一个项目文件夹">换</button>
-      <button type="button" className="project-chip-btn" onClick={() => void unbindProject()} disabled={busy} title="这个对话不再绑定项目文件夹">✕</button>
+      <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n${t('点一下在资源管理器里打开')}`}>📁 {projectLabel(currentProject)}</button>
+      <button type="button" className="project-chip-btn" onClick={() => void chooseProject(false)} disabled={busy} title={t('换一个项目文件夹')}>{t('换')}</button>
+      <button type="button" className="project-chip-btn" onClick={() => void unbindProject()} disabled={busy} title={t('这个对话不再绑定项目文件夹')}>✕</button>
     </span>
   ) : null;
   const uiMode = settings.uiMode;
   const p = settings.profile;
-  const me = p.displayName || p.callMe || '我';
+  const me = p.displayName || p.callMe || t('我');
 
   const controls = (
     <span className="page-controls">
-      <button type="button" className={`tb-btn${panel.pinned ? ' on' : ''}`} onClick={() => control('toggle-pin')} title={panel.pinned ? '已置顶：点一下取消' : '窗口始终在最前面'}>📌</button>
-      <button type="button" className={`tb-btn${panel.fullscreen ? ' on' : ''}`} onClick={() => control('toggle-fullscreen')} title={panel.fullscreen ? '退出全屏（F11 / Esc）' : '全屏（F11）'}>{panel.fullscreen ? '⤡' : '⤢'}</button>
+      <button type="button" className={`tb-btn${panel.pinned ? ' on' : ''}`} onClick={() => control('toggle-pin')} title={panel.pinned ? t('已置顶：点一下取消') : t('窗口始终在最前面')}>📌</button>
+      <button type="button" className={`tb-btn${panel.fullscreen ? ' on' : ''}`} onClick={() => control('toggle-fullscreen')} title={panel.fullscreen ? t('退出全屏（F11 / Esc）') : t('全屏（F11）')}>{panel.fullscreen ? '⤡' : '⤢'}</button>
     </span>
   );
   // Every page but the chat gets a close button (left of its title) that goes back to the chat; Esc does the same.
   const pageControls = (
     <>
-      <button type="button" className="page-close" onClick={() => setPage('chat')} title="关闭，回到会话（Esc）">✕</button>
+      <button type="button" className="page-close" onClick={() => setPage('chat')} title={t('关闭，回到会话（Esc）')}>✕</button>
       {controls}
     </>
   );
@@ -286,13 +287,13 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
         title={`${s.title}${s.project ? `\n📁 ${s.project}` : ''}`}
       >
         <span className="hx-session-main">
-          <span className="hx-session-title">{markPinned && s.pinned ? '📌 ' : ''}{s.title}</span>
+          <span className="hx-session-title">{markPinned && s.pinned ? '📌 ' : ''}{t(s.title)}</span>
         </span>
         <span className="hx-session-time">{shortDate(s.updatedAt)}</span>
         <span className="hx-session-actions">
           <button type="button" title={t('重命名会话')} onClick={e => { e.stopPropagation(); setNaming({ kind: 'session', id: s.id }); setNameInput(s.title); }}>✎</button>
-          <button type="button" className={s.pinned ? 'on' : ''} title={s.pinned ? '取消置顶' : '置顶'} onClick={(e) => { e.stopPropagation(); void togglePin(s); }}>📌</button>
-          <button type="button" title="删除这个会话" disabled={busy && s.id === session?.id} onClick={(e) => { e.stopPropagation(); void removeSession(s); }}>🗑</button>
+          <button type="button" className={s.pinned ? 'on' : ''} title={s.pinned ? t('取消置顶') : t('置顶')} onClick={(e) => { e.stopPropagation(); void togglePin(s); }}>📌</button>
+          <button type="button" title={t('删除这个会话')} disabled={busy && s.id === session?.id} onClick={(e) => { e.stopPropagation(); void removeSession(s); }}>🗑</button>
         </span>
       </div>
     );
@@ -304,14 +305,14 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
         <div className="nav-brand">
           {avatar ? <img src={avatar} alt="" className="hx-avatar" /> : <span className="hx-avatar" />}
           <span className="nav-brand-name">{name}</span>
-          {busy && <span className="nav-busy" title="她正在做事">●</span>}
-          <span className="nav-switch" role="tablist" aria-label="聊天 / 代码">
-            <button type="button" role="tab" aria-selected={navMode === 'chat'} className={navMode === 'chat' ? 'on' : ''} onClick={() => setNavMode('chat')} title="聊天：普通会话"><ChatIcon /></button>
-            <button type="button" role="tab" aria-selected={navMode === 'code'} className={navMode === 'code' ? 'on' : ''} onClick={() => setNavMode('code')} title="代码：项目和项目里的对话"><CodeIcon /></button>
+          {busy && <span className="nav-busy" title={t('她正在做事')}>●</span>}
+          <span className="nav-switch" role="tablist" aria-label={t('聊天 / 代码')}>
+            <button type="button" role="tab" aria-selected={navMode === 'chat'} className={navMode === 'chat' ? 'on' : ''} onClick={() => setNavMode('chat')} title={t('聊天：普通会话')}><ChatIcon /></button>
+            <button type="button" role="tab" aria-selected={navMode === 'code'} className={navMode === 'code' ? 'on' : ''} onClick={() => setNavMode('code')} title={t('代码：项目和项目里的对话')}><CodeIcon /></button>
           </span>
         </div>
         {navMode === 'chat' && (
-          <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? '她正在做事，做完再开新会话' : '开始新会话（Ctrl+N，/new）'}>＋ 新会话</button>
+          <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? t('她正在做事，做完再开新会话') : t('开始新会话（Ctrl+N，/new）')}>{t('＋ 新会话')}</button>
         )}
         {navMode === 'code' && <button type="button" className="nav-new" disabled={busy} onClick={() => { setNaming({ kind: 'group' }); setNameInput(''); }}>{t('＋ 创建项目组')}</button>}
         {naming && <form className="nav-name-form" onSubmit={async e => {
@@ -343,56 +344,56 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
           <button type="button" onClick={() => setNaming(null)}>{t('取消')}</button></div>
         </form>}
         <div className="nav-group nav-main">
-          <button type="button" className="nav-fold-all" onClick={() => toggleFold(`all:${navMode}`)} title={isFolded(`all:${navMode}`) ? '展开' : '折叠全部'}>
+          <button type="button" className="nav-fold-all" onClick={() => toggleFold(`all:${navMode}`)} title={isFolded(`all:${navMode}`) ? t('展开') : t('折叠全部')}>
             <Caret open={!isFolded(`all:${navMode}`)} />
-            <span>{navMode === 'chat' ? '会话' : '项目'}</span>
+            <span>{navMode === 'chat' ? t('会话') : t('项目')}</span>
             <small>{navMode === 'chat' ? chats.length : projects.size}</small>
           </button>
           <div className="nav-sessions">
             {!isFolded(`all:${navMode}`) && navMode === 'chat' && [...groups].map(([label, list]) => (
               <section key={label}>
                 <h4 className="fold-head" role="button" tabIndex={0} onClick={() => toggleFold(`g:${label}`)} onKeyDown={(e) => { if (e.key === 'Enter') toggleFold(`g:${label}`); }}>
-                  <Caret open={!isFolded(`g:${label}`)} />{label}<small>{list.length}</small>
+                  <Caret open={!isFolded(`g:${label}`)} />{t(label)}<small>{list.length}</small>
                 </h4>
                 {!isFolded(`g:${label}`) && list.map((s) => row(s, false))}
               </section>
             ))}
-            {!isFolded(`all:${navMode}`) && navMode === 'chat' && chats.length === 0 && <p className="hx-side-empty">还没有会话</p>}
+            {!isFolded(`all:${navMode}`) && navMode === 'chat' && chats.length === 0 && <p className="hx-side-empty">{t('还没有会话')}</p>}
             {!isFolded(`all:${navMode}`) && navMode === 'code' && [...projects].map(([folder, list]) => (
               <section key={folder} className="nav-project">
                 <div className={`nav-project-head${list.some((s) => s.current) ? ' current' : ''}`} title={folder}>
                   <button type="button" className="nav-project-name" onClick={() => toggleFold(`p:${folder}`)}>
                     <Caret open={!isFolded(`p:${folder}`)} /><span className="nav-project-icon">📁</span><span className="nav-project-label">{projectLabel(folder)}</span>
                   </button>
-                  <button type="button" className="nav-project-add" onClick={() => void newThread(folder)} disabled={busy} title="在这个项目里开一个新对话（新分支）">＋</button>
+                  <button type="button" className="nav-project-add" onClick={() => void newThread(folder)} disabled={busy} title={t('在这个项目里开一个新对话（新分支）')}>＋</button>
                 </div>
                 {!isFolded(`p:${folder}`) && <div className="nav-project-threads">{list.map((s) => row(s, true))}</div>}
               </section>
             ))}
-            {!isFolded(`all:${navMode}`) && navMode === 'code' && projects.size === 0 && <p className="hx-side-empty">点击「创建项目组」，选择工作文件夹即可开始。</p>}
+            {!isFolded(`all:${navMode}`) && navMode === 'code' && projects.size === 0 && <p className="hx-side-empty">{t('点击「创建项目组」，选择工作文件夹即可开始。')}</p>}
           </div>
         </div>
         {update.ready && (
-          <button type="button" className="nav-update" onClick={installUpdate} disabled={installing} title="安装新版本，桌宠会自动重启（几秒钟）">
-            {installing ? '正在更新，马上回来…' : '⬆ 有新版本 · 点此更新'}
+          <button type="button" className="nav-update" onClick={installUpdate} disabled={installing} title={t('安装新版本，桌宠会自动重启（几秒钟）')}>
+            {installing ? t('正在更新，马上回来…') : t('⬆ 有新版本 · 点此更新')}
           </button>
         )}
         <div className="nav-foot" ref={menuRef} data-open={menu ? '1' : '0'}>
           {menu && (
             <div className="me-menu" role="menu">
-              <button type="button" role="menuitem" className={page === 'schedules' ? 'on' : ''} onClick={() => go('schedules')}><span className="nav-icon">⏰</span>定时任务</button>
-              <button type="button" role="menuitem" className={page === 'skills' ? 'on' : ''} onClick={() => go('skills')}><span className="nav-icon">🧩</span>技能</button>
+              <button type="button" role="menuitem" className={page === 'schedules' ? 'on' : ''} onClick={() => go('schedules')}><span className="nav-icon">⏰</span>{t('定时任务')}</button>
+              <button type="button" role="menuitem" className={page === 'skills' ? 'on' : ''} onClick={() => go('skills')}><span className="nav-icon">🧩</span>{t('技能')}</button>
               <hr />
-              <button type="button" role="menuitem" className={page === 'profile' ? 'on' : ''} onClick={() => go('profile')}><span className="nav-icon">👤</span>我的资料</button>
-              <button type="button" role="menuitem" className={page === 'settings' ? 'on' : ''} onClick={() => go('settings')}><span className="nav-icon">⚙</span>设置<kbd>Ctrl+,</kbd></button>
+              <button type="button" role="menuitem" className={page === 'profile' ? 'on' : ''} onClick={() => go('profile')}><span className="nav-icon">👤</span>{t('我的资料')}</button>
+              <button type="button" role="menuitem" className={page === 'settings' ? 'on' : ''} onClick={() => go('settings')}><span className="nav-icon">⚙</span>{t('设置')}<kbd>Ctrl+,</kbd></button>
             </div>
           )}
-          <button type="button" className={`nav-me${menu || page !== 'chat' ? ' on' : ''}`} onClick={() => setMenu((m) => !m)} title="定时任务、技能、我的资料、设置" aria-haspopup="menu" aria-expanded={menu}>
+          <button type="button" className={`nav-me${menu || page !== 'chat' ? ' on' : ''}`} onClick={() => setMenu((m) => !m)} title={t('定时任务、技能、我的资料、设置')} aria-haspopup="menu" aria-expanded={menu}>
             {userAvatar ? <img src={userAvatar} alt="" className="hx-avatar small" /> : <span className="hx-avatar small hx-avatar-letter">{me.slice(0, 1)}</span>}
             <span className="nav-me-name">{me}</span><span className="nav-me-caret">{menu ? '▾' : '▴'}</span>
           </button>
           <button
-            type="button" className="nav-mode" title={`外观：${UI_LABEL[uiMode]}（点一下切换到${UI_LABEL[UI_NEXT[uiMode]]}）`}
+            type="button" className="nav-mode" title={t('外观：{now}（点一下切换到{next}）', { now: t(UI_LABEL[uiMode]), next: t(UI_LABEL[UI_NEXT[uiMode]]) })}
             onClick={() => void useSettingsStore.getState().update({ uiMode: UI_NEXT[uiMode] })}
           >{UI_ICON[uiMode]}</button>
         </div>
