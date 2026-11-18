@@ -180,4 +180,31 @@
 .hx-suggest { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
 .hx-suggest button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12.5px; }
 .hx-suggest button:hover { border-color: var(--orange); color: var(--orange); }
+.hx-welcome.code { margin-top: 22vh; max-width: 520px; gap: 14px; opacity: 1; }
+.hx-welcome.code .code-mark { opacity: 0.45; }
+.hx-welcome.code h2 { margin: 0; font-size: 26px; font-weight: 500; letter-spacing: 0.2px; }
+.hx-welcome.code p { font-size: 13px; opacity: 0.6; }
+/* code view: where she works, attached to the top of the input box */
+.code-strip { display: flex; align-items: center; gap: 4px; max-width: 790px; width: calc(100% - 80px); margin: 0 auto -10px; padding: 6px 10px 16px; border-radius: 14px 14px 0 0; background: var(--chip); }
+.code-strip-tab { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; font-size: 13px; opacity: 0.6; cursor: pointer; }
+.code-strip-tab:hover:not(:disabled) { opacity: 0.95; background: var(--chip); }
+.code-strip-tab.on { opacity: 1; font-weight: 600; }
+.code-strip-tab:disabled { cursor: default; }
+.code-strip-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-strip-pick { position: relative; }
+.code-strip .fold-caret { transform: rotate(90deg); }
+.code-strip .fold-caret.open { transform: rotate(-90deg); }
+.code-strip-menu {
+  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30; display: flex; flex-direction: column; gap: 2px; width: 340px; max-height: 360px; overflow-y: auto;
+  padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+.code-strip-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.code-strip-menu button:hover { background: var(--chip); }
+.code-strip-menu button.on { background: rgba(var(--accent-rgb), 0.12); }
+.code-strip-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.code-strip-label { padding: 4px 10px 2px; font-size: 11px; opacity: 0.5; }
+.code-strip-item { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.code-strip-item b { font-size: 13px; }
+.code-strip-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: 0.55; }
+.code-strip-plus { width: 16px; text-align: center; font-size: 15px; opacity: 0.7; }
 .hx-welcome h3 { margin: 4px 0 0; font-size: 18px; }

@@ -34,6 +34,16 @@ const CodeIcon = (): JSX.Element => (
     <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15" />
   </svg>
 );
+const LaptopIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4.5" y="5" width="15" height="10" rx="1.5" /><path d="M2.5 18.5h19" />
+  </svg>
+);
+const FolderIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" /><path d="M3.5 10h17" />
+  </svg>
+);
 const Caret = ({ open }: { open: boolean }): JSX.Element => (
   <svg className={`fold-caret${open ? ' open' : ''}`} viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="m4.5 2.5 3.5 3.5-3.5 3.5" />
@@ -49,6 +59,9 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const [page, setPage] = useState<Page>(initialPage);
   const [menu, setMenu] = useState(false);
   const [navMode, setNavModeState] = useState<NavMode>(() => load<NavMode>('nav.mode', 'chat'));
+  const [codeDraftId, setCodeDraftId] = useState<string | null>(null);
+  const [pickOpen, setPickOpen] = useState(false);
+  const pickRef = useRef<HTMLDivElement>(null);
   const [folded, setFolded] = useState<string[]>(() => load<string[]>('nav.folded', []));
   const setNavMode = (m: NavMode): void => { setNavModeState(m); save('nav.mode', m); };
   const isFolded = (key: string): boolean => folded.includes(key);
@@ -108,6 +121,12 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     return () => window.removeEventListener('mousedown', off);
   }, [menu]);
   const go = (p: Page): void => { setMenu(false); setPage(p); };
+  useEffect(() => {
+    if (!pickOpen) return;
+    const off = (e: MouseEvent): void => { if (!pickRef.current?.contains(e.target as Node)) setPickOpen(false); };
+    window.addEventListener('mousedown', off);
+    return () => window.removeEventListener('mousedown', off);
+  }, [pickOpen]);
   const installUpdate = (): void => {
     if (useChatStore.getState().requestId && !window.confirm('她正在做事，现在更新会打断她。仍然更新并重启吗？')) return;
     setInstalling(true);
@@ -136,6 +155,31 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     if (report(await window.petAPI.sessionProject(folder, fresh))) setNavMode('code');
     refreshSessions();
   };
+  /** A new, empty conversation in the code view: the project is chosen above the input box (like Codex). */
+  const newCodeThread = (): void => {
+    setPage('chat');
+    setNavMode('code');
+    if (useChatStore.getState().requestId) return;
+    void window.petAPI.sessionNew().then((r) => { if (report(r) && 'id' in r) setCodeDraftId(r.id); refreshSessions(); });
+  };
+  /** From the strip above the input: work in this folder (the open conversation if it is still empty, else a new one). */
+  const useProject = async (folder: string | null): Promise<void> => {
+    setPickOpen(false);
+    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: '她正在做事，做完再换项目' }); return; }
+    if (!folder) folder = await window.petAPI.agentPickFolder();
+    if (!folder) return;
+    const fresh = useChatStore.getState().messages.length > 0;
+    if (report(await window.petAPI.sessionProject(folder, fresh))) setNavMode('code');
+    refreshSessions();
+  };
+  const useComputer = async (): Promise<void> => {
+    if (!currentProjectRef.current) return;
+    if (useChatStore.getState().messages.length > 0 && !window.confirm('这个对话不再绑定项目文件夹，改为在整台电脑上工作？')) return;
+    const id = useChatStore.getState().session?.id ?? null;
+    if (report(await window.petAPI.sessionProject(null))) setCodeDraftId(id);
+    refreshSessions();
+  };
+
   /** A new conversation (thread) inside an existing project. */
   const newThread = async (folder: string): Promise<void> => {
     if (useChatStore.getState().requestId) { useChatStore.setState({ notice: '她正在做事，做完再开新对话' }); return; }
@@ -172,12 +216,40 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const currentProject = sessions.find((s) => s.current)?.project ?? null;
   // Opening (or starting) a conversation shows the view it belongs to.
   const currentId = sessions.find((s) => s.current)?.id ?? null;
+  const currentProjectRef = useRef<string | null>(null);
+  currentProjectRef.current = currentProject;
   useEffect(() => {
     if (!currentId) return;
-    const want: NavMode = currentProject ? 'code' : 'chat';
+    const want: NavMode = currentProject || currentId === codeDraftId ? 'code' : 'chat';
     if (want !== navMode) setNavMode(want);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId, currentProject]);
+  }, [currentId, currentProject, codeDraftId]);
+  const recentProjects = [...new Set(sessions.filter((s) => s.project).map((s) => s.project as string))].slice(0, 8);
+  // Above the input box in the code view: where she works — the whole computer, or a project folder.
+  const codeStrip = navMode === 'code' ? (
+    <div className="code-strip">
+      <button type="button" className={`code-strip-tab${currentProject ? '' : ' on'}`} onClick={() => void useComputer()} disabled={busy} title="不绑定项目，在整台电脑上工作">
+        <LaptopIcon /><span>这台电脑</span>
+      </button>
+      <div className="code-strip-pick" ref={pickRef}>
+        <button type="button" className={`code-strip-tab${currentProject ? ' on' : ''}`} onClick={() => setPickOpen((o) => !o)} disabled={busy} title={currentProject ?? '选一个项目文件夹'} aria-haspopup="listbox" aria-expanded={pickOpen}>
+          <FolderIcon /><span className="code-strip-name">{currentProject ? folderName(currentProject) : '选择项目'}</span><Caret open={pickOpen} />
+        </button>
+        {pickOpen && (
+          <div className="code-strip-menu" role="listbox">
+            {recentProjects.length > 0 && <div className="code-strip-label">最近的项目</div>}
+            {recentProjects.map((f) => (
+              <button key={f} type="button" role="option" aria-selected={f === currentProject} className={f === currentProject ? 'on' : ''} onClick={() => void useProject(f)} title={f}>
+                <FolderIcon /><span className="code-strip-item"><b>{folderName(f)}</b><small>{f}</small></span>
+              </button>
+            ))}
+            {recentProjects.length > 0 && <hr />}
+            <button type="button" onClick={() => void useProject(null)}><span className="code-strip-plus">＋</span><span className="code-strip-item"><b>选择文件夹…</b><small>打开电脑上的任意文件夹作为项目</small></span></button>
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
   const projectChip = currentProject ? (
     <span className="project-chip" title={currentProject}>
       <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n点一下在资源管理器里打开`}>📁 {folderName(currentProject)}</button>
@@ -239,7 +311,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
         {navMode === 'chat' ? (
           <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? '她正在做事，做完再开新会话' : '开始新会话（Ctrl+N，/new）'}>＋ 新会话</button>
         ) : (
-          <button type="button" className="nav-new" onClick={() => void chooseProject(true)} disabled={busy} title="选一个文件夹作为项目，她可以在里面建项目、改代码（像 Codex / Claude Code）">📁 打开项目</button>
+          <button type="button" className="nav-new" onClick={newCodeThread} disabled={busy} title="新的代码对话：在输入框上面选项目文件夹（或者直接在这台电脑上做）">＋ 新对话</button>
         )}
         <div className="nav-group nav-main">
           <button type="button" className="nav-fold-all" onClick={() => toggleFold(`all:${navMode}`)} title={isFolded(`all:${navMode}`) ? '展开' : '折叠全部'}>
@@ -298,7 +370,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       </aside>
 
       <main className="content">
-        <ChatView active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} project={projectChip} />
+        <ChatView active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} project={navMode === 'code' ? null : projectChip} codeMode={navMode === 'code'} composerTop={codeStrip} projectName={currentProject ? folderName(currentProject) : null} />
         {page === 'schedules' && <SchedulesPage controls={pageControls} />}
         {page === 'skills' && <SkillsPage controls={pageControls} />}
         {page === 'profile' && <ProfilePage controls={pageControls} userAvatar={userAvatar} onAvatar={setUserAvatar} />}

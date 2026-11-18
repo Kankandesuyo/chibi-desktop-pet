@@ -26,6 +26,10 @@ interface Props {
   controls: JSX.Element;
   /** The project folder chip (when this conversation works in one). */
   project?: JSX.Element | null;
+  /** The sidebar is in the code view: a code-style empty state and the project strip above the input. */
+  codeMode?: boolean;
+  composerTop?: JSX.Element | null;
+  projectName?: string | null;
 }
 
 /**
@@ -33,7 +37,7 @@ interface Props {
  * permission prompts and the plan; a trajectory tab with the raw event log; a composer with slash
  * commands and the permission mode; run stats and the context-window meter at the bottom.
  */
-export function ChatView({ active, avatar, userAvatar, onWanted, controls, project }: Props): JSX.Element {
+export function ChatView({ active, avatar, userAvatar, onWanted, controls, project, codeMode = false, composerTop = null, projectName = null }: Props): JSX.Element {
   const { messages, streaming, requestId, notice, steps, plan, interim, confirms, send, stop, clear, answer, session } = useChatStore();
   const settings = useSettingsStore((s) => s.settings);
   const [text, setText] = useState('');
@@ -148,7 +152,17 @@ export function ChatView({ active, avatar, userAvatar, onWanted, controls, proje
       ) : (
         <div className="hx-scroll" ref={listRef}>
           <div className="hx-thread">
-            {messages.length === 0 && !working && (
+            {messages.length === 0 && !working && codeMode && (
+              <div className="hx-welcome code">
+                <svg className="code-mark" viewBox="0 0 48 48" width="56" height="56" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M15 36.5h18a9 9 0 0 0 2.3-17.7A11 11 0 0 0 14 17.5a9.5 9.5 0 0 0 1 19Z" />
+                  <path d="m18.5 23.5 4 4-4 4M25 31.5h5.5" />
+                </svg>
+                <h2>{projectName ? `在 ${projectName} 里做点什么？` : '我们来做点什么？'}</h2>
+                <p>{projectName ? `${name}会在这个项目文件夹里读代码、改代码；删除文件和运行命令会先问你。` : '在下面选一个项目文件夹，或者直接在这台电脑上做。'}</p>
+              </div>
+            )}
+            {messages.length === 0 && !working && !codeMode && (
               <div className="hx-welcome">
                 {avatar && <img src={avatar} alt="" />}
                 <h3>{settings.profile.callMe ? `${settings.profile.callMe}，你好呀` : `我是${name}`}</h3>
@@ -198,6 +212,7 @@ export function ChatView({ active, avatar, userAvatar, onWanted, controls, proje
       )}
 
       <div className="hx-bottom">
+        {composerTop}
         <Composer
           text={text} setText={setText} onSubmit={submit} working={working} onStop={stop} placeholder={placeholder}
           inputRef={inputRef} attached={attached} onClearAttached={() => { setAttached([]); setHint(null); }}
