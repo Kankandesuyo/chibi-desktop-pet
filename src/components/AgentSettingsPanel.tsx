@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import type { AgentInfo, McpServerConfig, ToolGroup } from '../../shared/agentTypes';
-import { CONTEXT_WINDOWS, TOOL_GROUPS } from '../../shared/agentTypes';
+import { CONTEXT_WINDOWS, TOOL_GROUPS, PROJECT_LANGUAGES, type ProjectLanguage } from '../../shared/agentTypes';
 import type { Settings } from '../../shared/types';
 import { useSettingsStore } from '../store/settingsStore';
 
@@ -76,6 +76,10 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
         <select value={CONTEXT_WINDOWS.includes(a.contextWindow as (typeof CONTEXT_WINDOWS)[number]) ? a.contextWindow : ''} onChange={(e) => void updateAgent({ contextWindow: Number(e.target.value) })}>
           {!CONTEXT_WINDOWS.includes(a.contextWindow as (typeof CONTEXT_WINDOWS)[number]) && <option value="">{Math.round(a.contextWindow / 1000)}K</option>}
           {CONTEXT_WINDOWS.map((w) => <option key={w} value={w}>{w >= 1_000_000 ? `${w / 1_000_000}M` : `${w / 1000}K`}{w === 64000 ? '（旧版 DeepSeek V3 等）' : w === 128000 ? '（GPT-4o 等）' : w === 1_000_000 ? '（DeepSeek V4 / deepseek-flash 等）' : ''}</option>)}
+        </select></label>
+      <label className="row pick"><span>项目对话的语言<small>在「代码」里的项目对话中，她回答、汇报、写代码注释和提交说明用的语言。</small></span>
+        <select value={a.projectLanguage} onChange={(e) => void updateAgent({ projectLanguage: e.target.value as ProjectLanguage })}>
+          {PROJECT_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
         </select></label>
       <label className="row"><span>工具调用方式</span>
         <select value={a.toolProtocol} onChange={(e) => void updateAgent({ toolProtocol: e.target.value as 'auto' | 'native' | 'json' })}>

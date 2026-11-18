@@ -83,6 +83,13 @@ describe('project mode', () => {
     expect(system).toContain(project);
   });
 
+  it('uses the project language from settings', async () => {
+    setup([say('OK')]);
+    h!.settings.projectLanguage = 'en';
+    await h!.run('hi');
+    expect(String(h!.llm.requests[0]?.messages[0]?.content)).toContain('Reply and report in English');
+  });
+
   it('outside the project, editing an existing file still asks', async () => {
     h = makeHarness([]);
     const file = path.join(h.platform.folders.documents, 'note.txt');

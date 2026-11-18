@@ -132,7 +132,7 @@ export function lastToolResult(messages: LlmMessage[]): Record<string, unknown> 
 export const DEFAULT_SETTINGS: AgentSettings = {
   enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: false,
   toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as AgentSettings['toolGroups'],
-  toolProtocol: 'native', maxSteps: 20, contextWindow: 0, vision: { baseUrl: '', model: '', hasApiKey: false },
+  toolProtocol: 'native', maxSteps: 20, contextWindow: 0, projectLanguage: 'zh', vision: { baseUrl: '', model: '', hasApiKey: false },
 };
 
 export interface Harness {

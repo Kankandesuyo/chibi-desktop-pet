@@ -18,6 +18,28 @@ const UI_NEXT: Record<UiMode, UiMode> = { system: 'light', light: 'dark', dark: 
 const UI_LABEL: Record<UiMode, string> = { system: '跟随系统', light: '浅色', dark: '深色' };
 const UI_ICON: Record<UiMode, string> = { system: '◐', light: '☀', dark: '☾' };
 
+type NavMode = 'chat' | 'code';
+/** Per-viewer conveniences only (which sidebar view, which groups are folded): fine to lose. */
+const load = <T,>(key: string, fallback: T): T => { try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; } };
+const save = (key: string, value: unknown): void => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ } };
+const folderName = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+
+const ChatIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 12.5a7.5 7.5 0 0 1-11.2 6.5L4 20l1.1-4.3A7.5 7.5 0 1 1 20 12.5Z" />
+  </svg>
+);
+const CodeIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15" />
+  </svg>
+);
+const Caret = ({ open }: { open: boolean }): JSX.Element => (
+  <svg className={`fold-caret${open ? ' open' : ''}`} viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m4.5 2.5 3.5 3.5-3.5 3.5" />
+  </svg>
+);
+
 /**
  * The main window: a left navigation (her, new session, the sessions, schedules, skills, the user's
  * profile, settings, light/dark) and the page on the right. One window for everything; the native
@@ -26,6 +48,11 @@ const UI_ICON: Record<UiMode, string> = { system: '◐', light: '☀', dark: '�
 export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const [page, setPage] = useState<Page>(initialPage);
   const [menu, setMenu] = useState(false);
+  const [navMode, setNavModeState] = useState<NavMode>(() => load<NavMode>('nav.mode', 'chat'));
+  const [folded, setFolded] = useState<string[]>(() => load<string[]>('nav.folded', []));
+  const setNavMode = (m: NavMode): void => { setNavModeState(m); save('nav.mode', m); };
+  const isFolded = (key: string): boolean => folded.includes(key);
+  const toggleFold = (key: string): void => setFolded((f) => { const next = f.includes(key) ? f.filter((k) => k !== key) : [...f, key]; save('nav.folded', next); return next; });
   const [update, setUpdate] = useState<UpdateStatus>({ ready: false });
   const [installing, setInstalling] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -106,7 +133,14 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     const folder = await window.petAPI.agentPickFolder();
     if (!folder) return;
     setPage('chat');
-    report(await window.petAPI.sessionProject(folder, fresh));
+    if (report(await window.petAPI.sessionProject(folder, fresh))) setNavMode('code');
+    refreshSessions();
+  };
+  /** A new conversation (thread) inside an existing project. */
+  const newThread = async (folder: string): Promise<void> => {
+    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: '她正在做事，做完再开新对话' }); return; }
+    setPage('chat');
+    report(await window.petAPI.sessionProject(folder, true));
     refreshSessions();
   };
   const unbindProject = async (): Promise<void> => { report(await window.petAPI.sessionProject(null)); refreshSessions(); };
@@ -119,17 +153,31 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
 
   function newSession(): void {
     setPage('chat');
+    setNavMode('chat');
     if (useChatStore.getState().requestId) return;
     if (window.petAPI.sharedClear) void window.petAPI.sessionNew().then((r) => { if ('error' in r) useChatStore.setState({ notice: r.error }); refreshSessions(); });
     else useChatStore.getState().clear();
   }
 
+  // Chat view: conversations without a project, pinned first, then by day.
+  const chats = sessions.filter((s) => !s.project);
   const groups = new Map<string, SessionSummary[]>();
-  const pinned = sessions.filter((s) => s.pinned);
+  const pinned = chats.filter((s) => s.pinned);
   if (pinned.length) groups.set('📌 置顶', pinned);
-  for (const s of sessions) if (!s.pinned) groups.set(dayGroup(s.updatedAt), [...(groups.get(dayGroup(s.updatedAt)) ?? []), s]);
+  for (const s of chats) if (!s.pinned) groups.set(dayGroup(s.updatedAt), [...(groups.get(dayGroup(s.updatedAt)) ?? []), s]);
+  // Code view: one folder per project (most recently used first), its conversations inside, pinned first.
+  const projects = new Map<string, SessionSummary[]>();
+  for (const s of sessions) if (s.project) projects.set(s.project, [...(projects.get(s.project) ?? []), s]);
+  for (const list of projects.values()) list.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt);
   const currentProject = sessions.find((s) => s.current)?.project ?? null;
-  const folderName = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+  // Opening (or starting) a conversation shows the view it belongs to.
+  const currentId = sessions.find((s) => s.current)?.id ?? null;
+  useEffect(() => {
+    if (!currentId) return;
+    const want: NavMode = currentProject ? 'code' : 'chat';
+    if (want !== navMode) setNavMode(want);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId, currentProject]);
   const projectChip = currentProject ? (
     <span className="project-chip" title={currentProject}>
       <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n点一下在资源管理器里打开`}>📁 {folderName(currentProject)}</button>
@@ -154,11 +202,27 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       {controls}
     </>
   );
-  const nav = (id: Page, icon: string, label: string, extra?: string): JSX.Element => (
-    <button type="button" className={`nav-item${page === id ? ' on' : ''}`} onClick={() => setPage(id)} title={extra}>
-      <span className="nav-icon">{icon}</span><span className="nav-label">{label}</span>
-    </button>
-  );
+  const row = (s: SessionSummary, markPinned: boolean): JSX.Element => {
+    const locked = busy && s.id !== session?.id;
+    return (
+      <div
+        key={s.id} role="button" tabIndex={0} aria-disabled={locked}
+        className={`hx-session${s.id === session?.id ? ' current' : ''}${locked ? ' locked' : ''}`}
+        onClick={() => { if (!locked) openSession(s.id); }}
+        onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); openSession(s.id); } }}
+        title={`${s.title}${s.project ? `\n📁 ${s.project}` : ''}`}
+      >
+        <span className="hx-session-main">
+          <span className="hx-session-title">{markPinned && s.pinned ? '📌 ' : ''}{s.title}</span>
+        </span>
+        <span className="hx-session-time">{shortDate(s.updatedAt)}</span>
+        <span className="hx-session-actions">
+          <button type="button" className={s.pinned ? 'on' : ''} title={s.pinned ? '取消置顶' : '置顶'} onClick={(e) => { e.stopPropagation(); void togglePin(s); }}>📌</button>
+          <button type="button" title="删除这个会话" disabled={busy && s.id === session?.id} onClick={(e) => { e.stopPropagation(); void removeSession(s); }}>🗑</button>
+        </span>
+      </div>
+    );
+  };
 
   return (
     <div className={`app${panel.fullscreen ? ' is-full' : ''}`}>
@@ -167,42 +231,44 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
           {avatar ? <img src={avatar} alt="" className="hx-avatar" /> : <span className="hx-avatar" />}
           <span className="nav-brand-name">{name}</span>
           {busy && <span className="nav-busy" title="她正在做事">●</span>}
+          <span className="nav-switch" role="tablist" aria-label="聊天 / 代码">
+            <button type="button" role="tab" aria-selected={navMode === 'chat'} className={navMode === 'chat' ? 'on' : ''} onClick={() => setNavMode('chat')} title="聊天：普通会话"><ChatIcon /></button>
+            <button type="button" role="tab" aria-selected={navMode === 'code'} className={navMode === 'code' ? 'on' : ''} onClick={() => setNavMode('code')} title="代码：项目和项目里的对话"><CodeIcon /></button>
+          </span>
         </div>
-        <div className="nav-new-row">
+        {navMode === 'chat' ? (
           <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? '她正在做事，做完再开新会话' : '开始新会话（Ctrl+N，/new）'}>＋ 新会话</button>
-          <button type="button" className="nav-new nav-project" onClick={() => void chooseProject(true)} disabled={busy} title="选一个文件夹，开一个在里面建项目、改代码的对话（像 Codex / Claude Code）">📁 项目</button>
-        </div>
+        ) : (
+          <button type="button" className="nav-new" onClick={() => void chooseProject(true)} disabled={busy} title="选一个文件夹作为项目，她可以在里面建项目、改代码（像 Codex / Claude Code）">📁 打开项目</button>
+        )}
         <div className="nav-group nav-main">
-          {nav('chat', '💬', '会话')}
+          <button type="button" className="nav-fold-all" onClick={() => toggleFold(`all:${navMode}`)} title={isFolded(`all:${navMode}`) ? '展开' : '折叠全部'}>
+            <Caret open={!isFolded(`all:${navMode}`)} />
+            <span>{navMode === 'chat' ? '会话' : '项目'}</span>
+            <small>{navMode === 'chat' ? chats.length : projects.size}</small>
+          </button>
           <div className="nav-sessions">
-            {[...groups].map(([label, list]) => (
+            {!isFolded(`all:${navMode}`) && navMode === 'chat' && [...groups].map(([label, list]) => (
               <section key={label}>
-                <h4>{label}</h4>
-                {list.map((s) => {
-                  const locked = busy && s.id !== session?.id;
-                  return (
-                    <div
-                      key={s.id} role="button" tabIndex={0} aria-disabled={locked}
-                      className={`hx-session${s.id === session?.id ? ' current' : ''}${locked ? ' locked' : ''}`}
-                      onClick={() => { if (!locked) openSession(s.id); }}
-                      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); openSession(s.id); } }}
-                      title={`${s.title}${s.project ? `\n📁 ${s.project}` : ''}`}
-                    >
-                      <span className="hx-session-main">
-                        <span className="hx-session-title">{s.title}</span>
-                        {s.project && <span className="hx-session-project">📁 {folderName(s.project)}</span>}
-                      </span>
-                      <span className="hx-session-time">{shortDate(s.updatedAt)}</span>
-                      <span className="hx-session-actions">
-                        <button type="button" className={s.pinned ? 'on' : ''} title={s.pinned ? '取消置顶' : '置顶'} onClick={(e) => { e.stopPropagation(); void togglePin(s); }}>📌</button>
-                        <button type="button" title="删除这个会话" disabled={busy && s.id === session?.id} onClick={(e) => { e.stopPropagation(); void removeSession(s); }}>🗑</button>
-                      </span>
-                    </div>
-                  );
-                })}
+                <h4 className="fold-head" role="button" tabIndex={0} onClick={() => toggleFold(`g:${label}`)} onKeyDown={(e) => { if (e.key === 'Enter') toggleFold(`g:${label}`); }}>
+                  <Caret open={!isFolded(`g:${label}`)} />{label}<small>{list.length}</small>
+                </h4>
+                {!isFolded(`g:${label}`) && list.map((s) => row(s, false))}
               </section>
             ))}
-            {sessions.length === 0 && <p className="hx-side-empty">还没有会话</p>}
+            {!isFolded(`all:${navMode}`) && navMode === 'chat' && chats.length === 0 && <p className="hx-side-empty">还没有会话</p>}
+            {!isFolded(`all:${navMode}`) && navMode === 'code' && [...projects].map(([folder, list]) => (
+              <section key={folder} className="nav-project">
+                <div className={`nav-project-head${list.some((s) => s.current) ? ' current' : ''}`} title={folder}>
+                  <button type="button" className="nav-project-name" onClick={() => toggleFold(`p:${folder}`)}>
+                    <Caret open={!isFolded(`p:${folder}`)} /><span className="nav-project-icon">📁</span><span className="nav-project-label">{folderName(folder)}</span>
+                  </button>
+                  <button type="button" className="nav-project-add" onClick={() => void newThread(folder)} disabled={busy} title="在这个项目里开一个新对话（新分支）">＋</button>
+                </div>
+                {!isFolded(`p:${folder}`) && <div className="nav-project-threads">{list.map((s) => row(s, true))}</div>}
+              </section>
+            ))}
+            {!isFolded(`all:${navMode}`) && navMode === 'code' && projects.size === 0 && <p className="hx-side-empty">还没有项目。点上面的「打开项目」选一个文件夹，她就能在里面建项目、改代码。</p>}
           </div>
         </div>
         {update.ready && (

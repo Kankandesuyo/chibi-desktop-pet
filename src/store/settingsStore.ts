@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
   uiMode: 'system', profile: DEFAULT_PROFILE,
   ai: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat', hasApiKey: false },
   agent: {
-    enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true, toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW,
+    enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true, toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW, projectLanguage: 'zh',
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
     vision: { baseUrl: '', model: '', hasApiKey: false },
   },

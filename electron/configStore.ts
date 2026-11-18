@@ -39,7 +39,7 @@ const DEFAULT_AGENT: StoredAgent = {
   settings: {
     enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true,
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
-    toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW, vision: { baseUrl: '', model: '' },
+    toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW, projectLanguage: 'zh', vision: { baseUrl: '', model: '' },
   },
   visionKeyEncrypted: '', visionKeyPlain: '', approvals: {}, mcpServers: [],
 };
@@ -118,6 +118,7 @@ export function sanitizeAgentSettings(input: unknown, base: StoredAgentSettings)
     toolProtocol: s.toolProtocol === 'native' || s.toolProtocol === 'json' || s.toolProtocol === 'auto' ? s.toolProtocol : base.toolProtocol,
     maxSteps: Math.round(num(s.maxSteps, 3, 60, base.maxSteps)),
     contextWindow: Math.round(num(s.contextWindow, 8000, 2000000, base.contextWindow ?? DEFAULT_CONTEXT_WINDOW)),
+    projectLanguage: s.projectLanguage === 'zh' || s.projectLanguage === 'en' || s.projectLanguage === 'ja' ? s.projectLanguage : (base.projectLanguage ?? 'zh'),
     vision: { baseUrl: str(vision.baseUrl, base.vision.baseUrl).trim(), model: str(vision.model, base.vision.model, 100).trim() },
   };
 }

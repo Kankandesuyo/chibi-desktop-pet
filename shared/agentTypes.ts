@@ -29,8 +29,17 @@ export interface AgentSettings {
   maxSteps: number;
   /** The model's context window in tokens: long tasks are compacted before they reach it. */
   contextWindow: number;
+  /** Language she uses in project (code) conversations: replies, code comments, commit messages. */
+  projectLanguage: ProjectLanguage;
   vision: { baseUrl: string; model: string; hasApiKey: boolean };
 }
+
+export type ProjectLanguage = 'zh' | 'en' | 'ja';
+export const PROJECT_LANGUAGES: readonly { id: ProjectLanguage; label: string; prompt: string }[] = [
+  { id: 'zh', label: '中文', prompt: '用中文回答和汇报；代码注释、提交说明也用中文（代码里的标识符照常用英文）。' },
+  { id: 'en', label: 'English', prompt: 'Reply and report in English; write code comments, commit messages and docs in English too.' },
+  { id: 'ja', label: '日本語', prompt: '返答と報告は日本語で。コードのコメント、コミットメッセージ、ドキュメントも日本語で書く（識別子は英語のまま）。' },
+];
 
 /** Context window presets offered in settings (tokens). */
 export const CONTEXT_WINDOWS = [32000, 64000, 128000, 256000, 1000000] as const;

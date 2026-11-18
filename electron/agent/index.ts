@@ -1,3 +1,4 @@
+import { PROJECT_LANGUAGES, type ProjectLanguage } from '../../shared/agentTypes';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AgentInfo, AgentSettings, McpServerConfig } from '../../shared/agentTypes';
@@ -70,7 +71,7 @@ export type AgentRuntime = ReturnType<typeof createAgentRuntime>;
 
 /** Wires every agent module together. Used by the Electron main process and by the tests. */
 /** What she is told when the conversation has a project folder. */
-export function projectPromptBlock(project: string): string {
+export function projectPromptBlock(project: string, language: ProjectLanguage = 'zh'): string {
   const has = (f: string): boolean => fs.existsSync(path.join(project, f));
   const notes = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'package.json', 'pyproject.toml', 'requirements.txt', 'Cargo.toml', 'go.mod'].filter(has);
   const empty = (() => { try { return fs.readdirSync(project).length === 0; } catch { return false; } })();
@@ -84,6 +85,7 @@ export function projectPromptBlock(project: string): string {
     '- 在这个文件夹里新建和修改文件不需要逐个确认（都会备份，用户可以撤销）；删除文件、运行命令仍然每次请用户确认。',
     '- 改完能验证就验证（运行测试、构建或直接运行），失败就看输出继续修；最后简要汇报改了哪些文件、怎么运行、还有什么没做。',
     '- 不要改项目文件夹以外的东西，除非用户这次明确要求。',
+    `- 语言：${PROJECT_LANGUAGES.find((l) => l.id === language)?.prompt ?? PROJECT_LANGUAGES[0]?.prompt}（用户在设置里选的；用户这次明确用别的语言要求时以用户为准）`,
   ].join('\n');
 }
 
@@ -159,7 +161,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   // Project mode: the conversation is bound to a folder she builds and edits in (like Codex / Claude Code).
   hooks.on('turn/start', 'project', (ctx) => {
     const project = currentProject();
-    if (project) ctx.systemSections.push(projectPromptBlock(project));
+    if (project) ctx.systemSections.push(projectPromptBlock(project, o.settings().projectLanguage));
   });
   // Phase 3: skills, instruction files, permission rules, the user's own hooks.
   const instructionsFile = path.join(o.baseDir, 'AGENTS.md');

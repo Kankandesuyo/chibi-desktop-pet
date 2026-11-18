@@ -48,10 +48,6 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
 .nav-brand { display: flex; align-items: center; gap: 9px; height: 52px; padding: 10px 14px 0; -webkit-app-region: drag; }
 .nav-brand-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; font-size: 15px; }
 .nav-busy { color: var(--orange); font-size: 10px; animation: hx-blink 1s infinite; }
-.nav-new-row { display: flex; gap: 6px; margin: 10px 12px 6px; }
-.nav-new-row .nav-new { margin: 0; }
-.nav-new-row .nav-new:first-child { flex: 1; }
-.nav-project { flex: none; color: inherit; border-color: var(--line); font-weight: 600; }
 .project-chip { display: inline-flex; align-items: center; gap: 1px; min-width: 0; max-width: 260px; padding: 1px 2px 1px 4px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
 .project-chip button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; border-radius: 999px; }
 .project-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; font-weight: 600; }
@@ -72,6 +68,32 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
 .nav-icon { width: 18px; flex: none; text-align: center; }
 .nav-sessions { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 6px 6px; }
 .nav-sessions h4 { margin: 10px 6px 3px; font-size: 11px; font-weight: 600; opacity: 0.55; }
+/* chat / code switch (icons) at the right of her name */
+.nav-switch { display: inline-flex; flex: none; gap: 2px; padding: 2px; border-radius: 9px; background: var(--chip); -webkit-app-region: no-drag; }
+.nav-switch button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: none; color: inherit; opacity: 0.55; cursor: pointer; }
+.nav-switch button:hover { opacity: 0.9; }
+.nav-switch button.on { background: var(--surface); color: var(--orange); opacity: 1; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
+/* folding */
+.fold-caret { flex: none; opacity: 0.55; transition: transform 0.12s; }
+.fold-caret.open { transform: rotate(90deg); }
+.nav-fold-all { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.nav-fold-all:hover { background: var(--chip); }
+.nav-fold-all small, .fold-head small { margin-left: auto; font-size: 11px; font-weight: 400; opacity: 0.5; }
+.nav-sessions h4.fold-head { display: flex; align-items: center; gap: 4px; margin: 8px 0 2px; padding: 2px 6px; border-radius: 6px; cursor: pointer; user-select: none; }
+.nav-sessions h4.fold-head:hover { background: var(--chip); opacity: 0.85; }
+/* code view: project folders with their conversations */
+.nav-project { margin-top: 4px; }
+.nav-project-head { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
+.nav-project-head:hover { background: var(--chip); }
+.nav-project-head.current .nav-project-label { color: var(--orange); }
+.nav-project-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; padding: 6px 6px; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.nav-project-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-project-icon { flex: none; font-size: 13px; }
+.nav-project-add { flex: none; width: 26px; height: 24px; margin-right: 4px; padding: 0; border: 0; border-radius: 6px; background: none; color: inherit; font-size: 15px; opacity: 0; cursor: pointer; }
+.nav-project-head:hover .nav-project-add, .nav-project-add:focus-visible { opacity: 0.7; }
+.nav-project-add:hover:not(:disabled) { background: var(--surface); opacity: 1; color: var(--orange); }
+.nav-project-add:disabled { opacity: 0 !important; }
+.nav-project-threads { margin-left: 14px; padding-left: 6px; border-left: 1px solid var(--line); }
 .nav-sessions .hx-session { font-size: 12.5px; }
 .nav-update { margin: 0 12px 8px; padding: 8px 12px; border: 0; border-radius: 10px; background: var(--orange); color: #fff; font-weight: 700; text-align: left; }
 .nav-update:hover:not(:disabled) { filter: brightness(1.08); }
