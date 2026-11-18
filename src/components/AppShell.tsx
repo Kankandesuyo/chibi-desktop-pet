@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import type { SessionSummary } from '../../shared/harness';
 import type { PanelAction, PanelState, UiMode } from '../../shared/types';
 import { useChatStore } from '../store/chatStore';
@@ -25,6 +25,10 @@ const UI_ICON: Record<UiMode, string> = { system: '◐', light: '☀', dark: '�
  */
 export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const [page, setPage] = useState<Page>(initialPage);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef(page);
+  pageRef.current = page;
   const settings = useSettingsStore((s) => s.settings);
   const { requestId, session, messages } = useChatStore();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -52,6 +56,10 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     void window.petAPI.petAvatar().then(setAvatar);
     void window.petAPI.userAvatar().then(setUserAvatar);
     const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        if (menuRef.current?.dataset.open === '1') { setMenu(false); return; }
+        if (pageRef.current !== 'chat' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) { setPage('chat'); return; }
+      }
       if (e.key === 'Escape' && document.fullscreenElement === null) void window.petAPI.panelControl('state').then((s) => { if (s?.fullscreen) control('toggle-fullscreen'); });
       if (e.ctrlKey && e.key === ',') { e.preventDefault(); setPage('settings'); }
       if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); newSession(); }
@@ -60,6 +68,15 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     return () => { offNav(); offPanel(); offSettings(); window.removeEventListener('keydown', onKey); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The avatar menu closes on any click outside it.
+  useEffect(() => {
+    if (!menu) return;
+    const off = (e: MouseEvent): void => { if (!menuRef.current?.contains(e.target as Node)) setMenu(false); };
+    window.addEventListener('mousedown', off);
+    return () => window.removeEventListener('mousedown', off);
+  }, [menu]);
+  const go = (p: Page): void => { setMenu(false); setPage(p); };
 
   // The list changes when the session changes, and a new session gets its title from its first message.
   const firstUser = messages.find((m) => m.role === 'user')?.content ?? '';
@@ -88,6 +105,13 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       <button type="button" className={`tb-btn${panel.pinned ? ' on' : ''}`} onClick={() => control('toggle-pin')} title={panel.pinned ? '已置顶：点一下取消' : '窗口始终在最前面'}>📌</button>
       <button type="button" className={`tb-btn${panel.fullscreen ? ' on' : ''}`} onClick={() => control('toggle-fullscreen')} title={panel.fullscreen ? '退出全屏（F11 / Esc）' : '全屏（F11）'}>{panel.fullscreen ? '⤡' : '⤢'}</button>
     </span>
+  );
+  // Every page but the chat gets a close button (left of its title) that goes back to the chat; Esc does the same.
+  const pageControls = (
+    <>
+      <button type="button" className="page-close" onClick={() => setPage('chat')} title="关闭，回到会话（Esc）">✕</button>
+      {controls}
+    </>
   );
   const nav = (id: Page, icon: string, label: string, extra?: string): JSX.Element => (
     <button type="button" className={`nav-item${page === id ? ' on' : ''}`} onClick={() => setPage(id)} title={extra}>
@@ -128,13 +152,17 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
         <div className="nav-group nav-fixed">
           {nav('schedules', '⏰', '定时任务')}
           {nav('skills', '🧩', '技能')}
-          {nav('profile', '👤', '我的资料')}
-          {nav('settings', '⚙', '设置', 'Ctrl+,')}
         </div>
-        <div className="nav-foot">
-          <button type="button" className="nav-me" onClick={() => setPage('profile')} title="我的资料">
+        <div className="nav-foot" ref={menuRef} data-open={menu ? '1' : '0'}>
+          {menu && (
+            <div className="me-menu" role="menu">
+              <button type="button" role="menuitem" className={page === 'profile' ? 'on' : ''} onClick={() => go('profile')}><span className="nav-icon">👤</span>我的资料</button>
+              <button type="button" role="menuitem" className={page === 'settings' ? 'on' : ''} onClick={() => go('settings')}><span className="nav-icon">⚙</span>设置<kbd>Ctrl+,</kbd></button>
+            </div>
+          )}
+          <button type="button" className={`nav-me${menu || page === 'profile' || page === 'settings' ? ' on' : ''}`} onClick={() => setMenu((m) => !m)} title="我的资料、设置" aria-haspopup="menu" aria-expanded={menu}>
             {userAvatar ? <img src={userAvatar} alt="" className="hx-avatar small" /> : <span className="hx-avatar small hx-avatar-letter">{me.slice(0, 1)}</span>}
-            <span>{me}</span>
+            <span className="nav-me-name">{me}</span><span className="nav-me-caret">{menu ? '▾' : '▴'}</span>
           </button>
           <button
             type="button" className="nav-mode" title={`外观：${UI_LABEL[uiMode]}（点一下切换到${UI_LABEL[UI_NEXT[uiMode]]}）`}
@@ -145,10 +173,10 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
 
       <main className="content">
         <ChatView active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} />
-        {page === 'schedules' && <SchedulesPage controls={controls} />}
-        {page === 'skills' && <SkillsPage controls={controls} />}
-        {page === 'profile' && <ProfilePage controls={controls} userAvatar={userAvatar} onAvatar={setUserAvatar} />}
-        {page === 'settings' && <SettingsPage controls={controls} />}
+        {page === 'schedules' && <SchedulesPage controls={pageControls} />}
+        {page === 'skills' && <SkillsPage controls={pageControls} />}
+        {page === 'profile' && <ProfilePage controls={pageControls} userAvatar={userAvatar} onAvatar={setUserAvatar} />}
+        {page === 'settings' && <SettingsPage controls={pageControls} />}
       </main>
     </div>
   );
