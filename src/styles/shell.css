@@ -72,6 +72,13 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
 .nav-switch { display: inline-flex; flex: none; gap: 2px; padding: 2px; border-radius: 9px; background: var(--chip); -webkit-app-region: no-drag; }
 .nav-switch button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: none; color: inherit; opacity: 0.55; cursor: pointer; }
 .nav-switch button:hover { opacity: 0.9; }
+/* Collapse button: its own control beside the chat/code switch, not part of it. */
+.nav-collapse { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: none; color: inherit; font-size: 17px; opacity: 0.6; cursor: pointer; -webkit-app-region: no-drag; }
+.nav-collapse:hover:not(:disabled) { background: var(--chip); opacity: 1; }
+.nav-collapse:disabled { opacity: 0.3; cursor: default; }
+.app.nav-collapsed { grid-template-columns: 48px 1fr; }
+.nav-rail { align-items: center; gap: 6px; padding-top: 14px; -webkit-app-region: drag; }
+.nav-rail .nav-collapse, .nav-rail .nav-busy { -webkit-app-region: no-drag; }
 .nav-switch button.on { background: var(--surface); color: var(--orange); opacity: 1; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
 /* folding */
 .fold-caret { flex: none; opacity: 0.55; transition: transform 0.12s; }
@@ -279,6 +286,7 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
 
 @media (max-width: 900px) {
   .app { grid-template-columns: 200px 1fr; }
+  .app.nav-collapsed { grid-template-columns: 48px 1fr; }
   .split { grid-template-columns: 200px 1fr; }
 }
 

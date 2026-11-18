@@ -127,6 +127,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       if (e.key === 'Escape' && document.fullscreenElement === null) void window.petAPI.panelControl('state').then((s) => { if (s?.fullscreen) control('toggle-fullscreen'); });
       if (e.ctrlKey && e.key === ',') { e.preventDefault(); setPage('settings'); }
       if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); newSession(); }
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); toggleNav(); }
     };
     window.addEventListener('keydown', onKey);
     return () => { offNav(); offPanel(); offUpdate(); offSettings(); window.removeEventListener('keydown', onKey); };
@@ -313,7 +314,14 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   };
 
   return (
-    <div className={`app${panel.fullscreen ? ' is-full' : ''}`}>
+    <div className={`app${panel.fullscreen ? ' is-full' : ''}${navCollapsed ? ' nav-collapsed' : ''}`}>
+      {navCollapsed ? (
+        <aside className="nav nav-rail">
+          <button type="button" className="nav-collapse" onClick={toggleNav} title={t('展开侧边栏（Ctrl+B）')} aria-label={t('展开侧边栏（Ctrl+B）')}><SidebarIcon /></button>
+          {navMode === 'chat' && <button type="button" className="nav-collapse" onClick={newSession} disabled={busy} title={busy ? t('她正在做事，做完再开新会话') : t('开始新会话（Ctrl+N，/new）')}>＋</button>}
+          {busy && <span className="nav-busy" title={t('她正在做事')}>●</span>}
+        </aside>
+      ) : (
       <aside className="nav">
         <div className="nav-brand">
           {avatar ? <img src={avatar} alt="" className="hx-avatar" /> : <span className="hx-avatar" />}
@@ -412,6 +420,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
           >{UI_ICON[uiMode]}</button>
         </div>
       </aside>
+      )}
 
       <main className={`content${browser.open && page === 'chat' ? ' with-pane' : ''}`}>
         <div className="content-main">

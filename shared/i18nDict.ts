@@ -399,6 +399,8 @@ export const DICT: Record<string, [string, string]> = {
   "新标签页": ["New tab", "新しいタブ"],
   "新的代码对话：在输入框上面选项目文件夹（或者直接在这台电脑上做）": ["New code conversation: choose a project folder above the input box (or just work on this computer)", "新しいコード会話：入力欄の上でプロジェクトフォルダーを選ぶ（またはこのパソコンで直接作業）"],
   "新会话": ["New chat", "新しい会話"],
+  "收起侧边栏（Ctrl+B）": ["Collapse sidebar (Ctrl+B)", "サイドバーを閉じる（Ctrl+B）"],
+  "展开侧边栏（Ctrl+B）": ["Expand sidebar (Ctrl+B)", "サイドバーを開く（Ctrl+B）"],
   "新技能": ["New skill", "新しいスキル"],
   "新建、移动文件等不再逐个询问。高风险操作（删除、覆盖、运行命令…）永远逐次确认；读取了外部内容后也会改为询问。": ["Creating or moving files no longer asks each time. High-risk steps (delete, overwrite, run commands…) always ask, and so does anything after reading outside content.", "ファイルの作成や移動を毎回確認しなくなります。高リスクの操作（削除・上書き・コマンド実行…）は常に確認し、外部の内容を読んだ後も確認に戻ります。"],
   "新角色名字": ["New character name", "新しいキャラクター名"],
