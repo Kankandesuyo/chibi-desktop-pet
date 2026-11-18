@@ -65,7 +65,7 @@ const Caret = ({ open }: { open: boolean }): JSX.Element => (
  */
 export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const t = useT();
-  const [browser, setBrowser] = useState<BrowserPaneState>({ open: false, url: '', title: '', loading: false, canGoBack: false, canGoForward: false });
+  const [browser, setBrowser] = useState<BrowserPaneState>({ open: false, url: '', title: '', loading: false, canGoBack: false, canGoForward: false, tabs: [], active: 0 });
   const [browserWidth, setBrowserWidthState] = useState<number>(() => load<number>('browser.width', 520));
   const setBrowserWidth = (w: number): void => { const v = Math.max(320, Math.min(w, window.innerWidth - 232 - 380)); setBrowserWidthState(v); save('browser.width', v); };
   useEffect(() => { void window.petAPI.browserState().then(setBrowser); return window.petAPI.onBrowser(setBrowser); }, []);

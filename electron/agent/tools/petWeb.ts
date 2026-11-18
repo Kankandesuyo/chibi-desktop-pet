@@ -3,7 +3,7 @@ import { defineTool } from '../types';
 
 let window: BrowserWindow | undefined;
 /** The pane inside the main window (set by the main process); without it a separate window is used. */
-let host: { contents(): Promise<WebContents>; close(): void } | null = null;
+let host: { contents(): Promise<WebContents>; newTab?(): Promise<WebContents>; close(): void } | null = null;
 /** The page searches and reads happen in (the pane's, or the separate window's). */
 let current: WebContents | undefined;
 export function setPetBrowserHost(h: typeof host): void { host = h; }
@@ -66,7 +66,7 @@ function getWindow(newWindow = false) {
 async function visit(url: string, signal: AbortSignal, newWindow = false) {
   signal.throwIfAborted();
   let contents: WebContents;
-  if (host) contents = await host.contents();
+  if (host) contents = newWindow && host.newTab ? await host.newTab() : await host.contents();
   else {
     const win = getWindow(newWindow);
     if (win.isMinimized()) win.restore();

@@ -154,6 +154,7 @@ export const DICT: Record<string, [string, string]> = {
   "构建时间": ["Built", "ビルド日時"],
   "关闭": ["Off", "オフ"],
   "关闭，回到会话（Esc）": ["Close and go back to the conversation (Esc)", "閉じて会話に戻る（Esc）"],
+  "关闭标签页": ["Close tab", "タブを閉じる"],
   "关闭浏览器": ["Close browser", "ブラウザーを閉じる"],
   "关闭时聊天用离线短句": ["When off, chat uses short offline lines", "オフのときはオフラインの短い返事を使います"],
   "关于": ["About", "このアプリについて"],

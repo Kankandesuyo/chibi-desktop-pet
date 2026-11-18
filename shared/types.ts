@@ -105,10 +105,17 @@ export type PanelAction = 'state' | 'toggle-pin' | 'toggle-fullscreen' | 'hide';
 /** A new build staged as resources/app.asar.new, installed from inside the app. */
 export interface UpdateStatus { ready: boolean; stagedAt?: number; error?: string }
 /** The built-in browser pane in the main window. */
-export interface BrowserPaneState { open: boolean; url: string; title: string; loading: boolean; canGoBack: boolean; canGoForward: boolean; error?: string }
+/** One tab of the built-in browser (url '' / about:blank = its start page). */
+export interface BrowserTabInfo { id: number; url: string; title: string; loading: boolean }
+/** The built-in browser pane; the top-level fields describe the active tab. */
+export interface BrowserPaneState {
+  open: boolean; url: string; title: string; loading: boolean; canGoBack: boolean; canGoForward: boolean; error?: string;
+  tabs: BrowserTabInfo[]; active: number;
+}
 export type BrowserPaneAction =
   | { type: 'open'; url?: string } | { type: 'navigate'; url: string }
-  | { type: 'blank' } | { type: 'back' } | { type: 'forward' } | { type: 'reload' } | { type: 'external' } | { type: 'close' };
+  | { type: 'newTab'; url?: string } | { type: 'switchTab'; id: number } | { type: 'closeTab'; id: number }
+  | { type: 'back' } | { type: 'forward' } | { type: 'reload' } | { type: 'external' } | { type: 'close' };
 export interface PanelState { pinned: boolean; fullscreen: boolean; maximized: boolean }
 
 export type PetNotice = AiReplyMeta | { talking: boolean } | AgentPetSignal;

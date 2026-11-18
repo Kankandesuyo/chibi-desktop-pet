@@ -1,6 +1,6 @@
 {
   "name": "chibi-desktop-pet",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Q版智能互动桌宠 (Electron + React + PixiJS)",
   "author": "神",
   "private": true,

@@ -95,13 +95,27 @@ export function BrowserPane({ state, width, onWidth }: { state: BrowserPaneState
     <aside className="browser-pane" style={{ width }}>
       <div className={`browser-divider${dragging ? ' on' : ''}`} onMouseDown={startDrag} title={t('拖动调整宽度')} />
       <header className="browser-head">
-        <div className="browser-tab" title={state.url || t('新标签页')}>
-          {state.loading ? <span className="browser-spin" aria-hidden="true" /> : <Icon d={GLOBE} size={15} />}
-          <span className="browser-tab-title">{blank ? t('新标签页') : state.title || host(state.url)}</span>
-          <button type="button" onClick={() => act({ type: 'close' })} title={t('关闭浏览器')}><Icon d={CLOSE} size={13} /></button>
+        <div className="browser-tabs" role="tablist">
+          {state.tabs.map((tab) => {
+            const empty = !/^https?:/.test(tab.url);
+            const label = empty ? t('新标签页') : tab.title || host(tab.url);
+            return (
+              <div
+                key={tab.id} role="tab" aria-selected={tab.id === state.active} tabIndex={0}
+                className={`browser-tab${tab.id === state.active ? ' on' : ''}`} title={empty ? label : `${label}
+${tab.url}`}
+                onClick={() => { if (tab.id !== state.active) act({ type: 'switchTab', id: tab.id }); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') act({ type: 'switchTab', id: tab.id }); }}
+                onAuxClick={(e) => { if (e.button === 1) act({ type: 'closeTab', id: tab.id }); }}
+              >
+                {tab.loading ? <span className="browser-spin" aria-hidden="true" /> : <Icon d={GLOBE} size={15} />}
+                <span className="browser-tab-title">{label}</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); act({ type: 'closeTab', id: tab.id }); }} title={t('关闭标签页')}><Icon d={CLOSE} size={13} /></button>
+              </div>
+            );
+          })}
+          <button type="button" className="browser-head-btn" onClick={() => act({ type: 'newTab' })} title={t('新标签页')}><Icon d={NEW_TAB} /></button>
         </div>
-        {!blank && <button type="button" className="browser-head-btn" onClick={() => act({ type: 'blank' })} title={t('新标签页')}><Icon d={NEW_TAB} /></button>}
-        <span className="browser-head-gap" />
         <button type="button" className="browser-head-btn" onClick={() => act({ type: 'external' })} disabled={blank} title={t('在系统浏览器中打开')}><Icon d={EXTERNAL} /></button>
       </header>
       {!blank && (
