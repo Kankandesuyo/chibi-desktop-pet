@@ -5,7 +5,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DEFAULT_HOTKEY, HOTKEY_CHOICES, SIZE_MAX, SIZE_MIN } from '../shared/constants';
 import { sanitizeRules } from './agent/permissionRules';
-import { TOOL_GROUPS, type AgentSettings, type McpServerConfig, type ToolGroup } from '../shared/agentTypes';
+import { DEFAULT_PROFILE, sanitizeProfile } from '../shared/profile';
+import { DEFAULT_CONTEXT_WINDOW, TOOL_GROUPS, type AgentSettings, type McpServerConfig, type ToolGroup } from '../shared/agentTypes';
 import { EMOTIONS, type AgentSettingsPatch, type ChatMessage, type Emotion, type PetStats, type Point, type Settings } from '../shared/types';
 
 type CoreSettings = Omit<Settings, 'ai' | 'agent'>;
@@ -28,13 +29,17 @@ interface StoredConfig {
   feet: Point | null;
   chatHistory: ChatMessage[];
   agent: StoredAgent;
+  /** Main window placement (remembered between launches). */
+  mainWindow: MainWindowState | null;
 }
+
+export interface MainWindowState { x: number; y: number; width: number; height: number; maximized: boolean }
 
 const DEFAULT_AGENT: StoredAgent = {
   settings: {
     enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true,
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
-    toolProtocol: 'auto', maxSteps: 25, vision: { baseUrl: '', model: '' },
+    toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW, vision: { baseUrl: '', model: '' },
   },
   visionKeyEncrypted: '', visionKeyPlain: '', approvals: {}, mcpServers: [],
 };
@@ -44,13 +49,21 @@ const DEFAULTS: StoredConfig = {
     size: 0.6, opacity: 1, speed: 1, autoMoveFrequency: 0.5, autoMove: true, allowDrag: true, gravity: false,
     alwaysOnTop: true, sound: false, aiEnabled: false, launchAtLogin: false, globalHotkey: DEFAULT_HOTKEY,
     petName: DEFAULT_PET_NAME, personaTraits: '', monologue: 'normal', character: DEFAULT_CHARACTER, theme: 'auto',
+    uiMode: 'system', profile: DEFAULT_PROFILE,
   },
   ai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKeyEncrypted: '', apiKeyPlain: '' },
   stats: { mood: 'neutral', affection: 30, energy: 80, interactionCount: 0 },
   feet: null,
   chatHistory: [],
   agent: DEFAULT_AGENT,
+  mainWindow: null,
 };
+
+function sanitizeWindow(input: unknown): MainWindowState | null {
+  const w = (input ?? null) as Record<string, unknown> | null;
+  if (!w || ![w.x, w.y, w.width, w.height].every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+  return { x: Math.round(w.x as number), y: Math.round(w.y as number), width: Math.round(num(w.width, 600, 10000, 1000)), height: Math.round(num(w.height, 400, 10000, 700)), maximized: bool(w.maximized, false) };
+}
 
 const MAX_HISTORY = 40;
 
@@ -84,6 +97,8 @@ export function sanitizeSettings(input: unknown, base: CoreSettings): CoreSettin
     petName: cleanPetName(s.petName, base.petName),
     personaTraits: cleanTraits(s.personaTraits, base.personaTraits),
     monologue: isMonologueLevel(s.monologue) ? s.monologue : base.monologue,
+    uiMode: s.uiMode === 'light' || s.uiMode === 'dark' || s.uiMode === 'system' ? s.uiMode : base.uiMode,
+    profile: sanitizeProfile(s.profile, base.profile ?? DEFAULT_PROFILE),
   };
 }
 
@@ -102,6 +117,7 @@ export function sanitizeAgentSettings(input: unknown, base: StoredAgentSettings)
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, bool(groups[g], base.toolGroups[g])])) as Record<ToolGroup, boolean>,
     toolProtocol: s.toolProtocol === 'native' || s.toolProtocol === 'json' || s.toolProtocol === 'auto' ? s.toolProtocol : base.toolProtocol,
     maxSteps: Math.round(num(s.maxSteps, 3, 60, base.maxSteps)),
+    contextWindow: Math.round(num(s.contextWindow, 8000, 2000000, base.contextWindow ?? DEFAULT_CONTEXT_WINDOW)),
     vision: { baseUrl: str(vision.baseUrl, base.vision.baseUrl).trim(), model: str(vision.model, base.vision.model, 100).trim() },
   };
 }
@@ -175,6 +191,7 @@ export class ConfigStore {
         feet: feet && Number.isFinite(feet.x) && Number.isFinite(feet.y) ? { x: feet.x, y: feet.y } : null,
         chatHistory: sanitizeHistory(raw.chatHistory),
         agent: this.loadAgent(raw.agent),
+        mainWindow: sanitizeWindow(raw.mainWindow),
       };
     } catch {
       this.data = structuredClone(DEFAULTS);
@@ -215,6 +232,7 @@ export class ConfigStore {
   getSettings(): Settings {
     return {
       ...this.data.settings,
+      profile: { ...this.data.settings.profile },
       ai: { baseUrl: this.data.ai.baseUrl, model: this.data.ai.model, hasApiKey: this.getApiKey() !== '' },
       agent: this.getAgentSettings(),
     };
@@ -259,7 +277,10 @@ export class ConfigStore {
   setMcpServers(servers: unknown): void { this.data.agent.mcpServers = sanitizeMcpServers(servers); this.scheduleSave(); }
 
   updateSettings(patch: unknown): Settings {
-    this.data.settings = sanitizeSettings({ ...this.data.settings, ...(patch as object) }, this.data.settings);
+    const p = { ...((patch ?? {}) as Record<string, unknown>) };
+    // Profile patches merge field by field; whether an avatar exists is only set by setAvatarSaved().
+    if (p.profile && typeof p.profile === 'object') p.profile = { ...this.data.settings.profile, ...(p.profile as object), hasAvatar: this.data.settings.profile.hasAvatar };
+    this.data.settings = sanitizeSettings({ ...this.data.settings, ...p }, this.data.settings);
     this.scheduleSave();
     return this.getSettings();
   }
@@ -293,6 +314,15 @@ export class ConfigStore {
   getAiEndpoint(): { baseUrl: string; model: string } {
     return { baseUrl: this.data.ai.baseUrl, model: this.data.ai.model };
   }
+
+  setAvatarSaved(saved: boolean): Settings {
+    this.data.settings.profile = { ...this.data.settings.profile, hasAvatar: saved };
+    this.scheduleSave();
+    return this.getSettings();
+  }
+
+  getMainWindow(): MainWindowState | null { return this.data.mainWindow ? { ...this.data.mainWindow } : null; }
+  setMainWindow(state: MainWindowState): void { this.data.mainWindow = sanitizeWindow(state); this.scheduleSave(); }
 
   getStats(): PetStats { return { ...this.data.stats }; }
   setStats(stats: unknown): void { this.data.stats = sanitizeStats(stats, this.data.stats); this.scheduleSave(); }

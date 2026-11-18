@@ -1,10 +1,10 @@
-import { BrowserWindow, screen, type Display } from 'electron';
+import { BrowserWindow, nativeTheme, screen, type Display } from 'electron';
 import * as path from 'node:path';
 import {
   CHARACTER_HALF_WIDTH, CHARACTER_HEIGHT, FOOT_MARGIN, IPC, windowSizeFor,
 } from '../shared/constants';
 import type { ChatCompose } from '../shared/fileDrop';
-import type { DragUpdate, PetPlacement, Point, Rect } from '../shared/types';
+import type { DragUpdate, PanelState, PetPlacement, Point, Rect } from '../shared/types';
 import type { ConfigStore } from './configStore';
 
 export type PanelView = 'chat' | 'settings';
@@ -23,6 +23,12 @@ const ON_TOP_CHECK_MS = 3000;
 const CURSOR_POLL_MS = 40;
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
+const LIGHT_BG = '#f7f4f0';
+const DARK_BG = '#1c1b1a';
+/** Colours of the native window buttons drawn over the page's own title bar (40 px tall). */
+function titleBarColors(dark: boolean): Electron.TitleBarOverlayOptions {
+  return dark ? { color: '#00000000', symbolColor: '#e8e4df', height: 40 } : { color: '#00000000', symbolColor: '#3a3632', height: 40 };
+}
 export const APP_ORIGIN = 'app://local';
 
 function pageUrl(view: 'pet' | 'highlight' | PanelView): string {
@@ -42,12 +48,8 @@ export function clampFeet(feet: Point, wa: Rect, size: number): Point {
 /** Owns every BrowserWindow: the transparent pet window plus the chat / settings panels. */
 export class WindowManager {
   pet: BrowserWindow | null = null;
-  private panels = new Map<PanelView, BrowserWindow>();
-  /** Chat window: stays on top unless unpinned; four sizes. */
+  /** Main window "stay on top" (the pin button). */
   private chatPinned = false;
-  private chatSize = 1;
-  /** Narrow (no session column) → harness layout with the session column → bigger. */
-  static readonly CHAT_SIZES = [{ width: 420, height: 560 }, { width: 860, height: 620 }, { width: 1000, height: 700 }, { width: 1180, height: 800 }];
   private feet: Point = { x: 0, y: 0 };
   private dragTimer: NodeJS.Timeout | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -82,7 +84,7 @@ export class WindowManager {
   /** Opens (or brings forward) the chat with the cursor in its input box. */
   focusChat(): void {
     this.openPanel('chat');
-    const win = this.panels.get('chat');
+    const win = this.main;
     if (!win || win.isDestroyed()) return;
     win.focus();
     // A freshly created chat focuses its input by itself once loaded.
@@ -93,13 +95,13 @@ export class WindowManager {
   composeInChat(c: ChatCompose): void {
     this.pendingCompose = c;
     this.openPanel('chat');
-    const win = this.panels.get('chat');
+    const win = this.main;
     // A freshly created chat takes it itself once loaded; an open one is told now.
     if (win && !win.isDestroyed() && !win.webContents.isLoading()) win.webContents.send(IPC.chatCompose);
   }
 
   takeCompose(webContentsId: number): ChatCompose | null {
-    const win = this.panels.get('chat');
+    const win = this.main;
     if (!win || win.isDestroyed() || win.webContents.id !== webContentsId) return null;
     const c = this.pendingCompose;
     this.pendingCompose = null;
@@ -300,6 +302,7 @@ export class WindowManager {
 
   applySettingsToWindows(): void {
     const s = this.config.getSettings();
+    this.applyUiMode();
     if (!this.pet || this.pet.isDestroyed()) return;
     this.pet.setAlwaysOnTop(s.alwaysOnTop, ON_TOP_LEVEL);
     this.pet.setOpacity(s.opacity);
@@ -316,115 +319,149 @@ export class WindowManager {
   /** Icon of the settings / chat windows (taskbar, Alt+Tab). */
   setIcon(icon: Electron.NativeImage): void {
     this.icon = icon;
-    for (const w of [this.pet, ...this.panels.values()]) if (w && !w.isDestroyed()) w.setIcon(icon);
+    for (const w of [this.pet, this.main]) if (w && !w.isDestroyed()) w.setIcon(icon);
   }
 
   isDragging(): boolean { return !!this.dragTimer; }
   isPetVisible(): boolean { return !!this.pet && !this.pet.isDestroyed() && this.pet.isVisible(); }
 
-  openPanel(view: PanelView): void {
-    const existing = this.panels.get(view);
-    if (existing && !existing.isDestroyed()) { existing.show(); existing.focus(); return; }
-    const size = view === 'chat' ? this.fitToScreen(WindowManager.CHAT_SIZES[this.chatSize] ?? { width: 860, height: 620 }) : { width: 460, height: 720 };
+  /**
+   * The main window: chat, sessions, schedules, skills, profile and settings in one place. A normal
+   * app window: resizable, maximizable, F11 full screen, remembers where it was. 'settings' opens the
+   * same window on its settings page.
+   */
+  openPanel(view: PanelView, page?: string): void {
+    const target = view === 'settings' ? 'settings' : page;
+    const existing = this.main;
+    if (existing && !existing.isDestroyed()) {
+      if (existing.isMinimized()) existing.restore();
+      existing.show(); existing.focus();
+      if (target) existing.webContents.send(IPC.navigate, target);
+      return;
+    }
     const wa = this.displayFor(this.feet).workArea;
-    const petTop = this.feet.y - CHARACTER_HEIGHT * this.size;
-    let x = this.feet.x - CHARACTER_HALF_WIDTH * this.size - size.width - 8;
-    if (x < wa.x) x = this.feet.x + CHARACTER_HALF_WIDTH * this.size + 8;
-    x = Math.min(wa.x + wa.width - size.width, Math.max(wa.x, x));
-    const y = Math.min(wa.y + wa.height - size.height, Math.max(wa.y, petTop - size.height / 2));
+    const saved = this.config.getMainWindow();
+    const fits = !!saved && screen.getAllDisplays().some((d) => {
+      const a = d.workArea;
+      return saved.x + 80 < a.x + a.width && saved.x + saved.width - 80 > a.x && saved.y >= a.y - 10 && saved.y + 40 < a.y + a.height;
+    });
+    const width = Math.min(saved?.width ?? 1080, wa.width - 20);
+    const height = Math.min(saved?.height ?? 720, wa.height - 20);
+    const bounds = fits && saved
+      ? { x: saved.x, y: saved.y, width, height }
+      : { x: Math.round(wa.x + (wa.width - width) / 2), y: Math.round(wa.y + (wa.height - height) / 2), width, height };
+    const dark = this.isDark();
     const win = new BrowserWindow({
-      ...size,
-      x: Math.round(x),
-      y: Math.round(y),
-      frame: view === 'settings',
-      transparent: view === 'chat',
-      resizable: true,
-      minWidth: view === 'chat' ? 300 : 380,
-      minHeight: view === 'chat' ? 360 : 400,
-      maximizable: false,
-      fullscreenable: false,
-      skipTaskbar: view === 'chat',
-      alwaysOnTop: view === 'chat' && this.chatPinned,
-      hasShadow: view === 'settings',
-      backgroundColor: view === 'chat' ? '#00000000' : '#fff8f0',
-      title: view === 'chat' ? '聊天' : '桌宠设置',
+      ...bounds,
+      minWidth: 760, minHeight: 520,
+      titleBarStyle: 'hidden',
+      titleBarOverlay: titleBarColors(dark),
+      resizable: true, maximizable: true, fullscreenable: true,
+      alwaysOnTop: this.chatPinned,
+      backgroundColor: dark ? DARK_BG : LIGHT_BG,
+      title: this.config.getSettings().petName || '桌宠',
       ...(this.icon ? { icon: this.icon } : {}),
       autoHideMenuBar: true,
       show: false,
       webPreferences: this.webPreferences(),
     });
     win.setMenuBarVisibility(false);
-    win.once('ready-to-show', () => win.show());
-    if (view === 'chat' && this.chatPinned) win.setAlwaysOnTop(true, ON_TOP_LEVEL);
-    win.on('closed', () => this.panels.delete(view));
-    void win.loadURL(pageUrl(view));
-    this.panels.set(view, win);
+    win.once('ready-to-show', () => { if (saved?.maximized && fits) win.maximize(); win.show(); });
+    if (this.chatPinned) win.setAlwaysOnTop(true, ON_TOP_LEVEL);
+    // Closing only hides it: a running task, its confirmations and the conversation stay alive.
+    win.on('close', (e) => {
+      if (this.quitting) return;
+      e.preventDefault();
+      if (win.isFullScreen()) win.setFullScreen(false);
+      win.hide();
+    });
+    win.on('closed', () => { if (this.main === win) this.main = null; });
+    const remember = (): void => {
+      if (this.boundsTimer) clearTimeout(this.boundsTimer);
+      this.boundsTimer = setTimeout(() => {
+        if (win.isDestroyed() || win.isFullScreen() || win.isMinimized()) return;
+        const b = win.isMaximized() ? win.getNormalBounds() : win.getBounds();
+        this.config.setMainWindow({ ...b, maximized: win.isMaximized() });
+      }, 500);
+    };
+    win.on('resize', remember); win.on('move', remember); win.on('maximize', remember); win.on('unmaximize', remember);
+    const tellState = (): void => { if (!win.isDestroyed()) win.webContents.send(IPC.panelState, this.panelState(win)); };
+    win.on('maximize', tellState); win.on('unmaximize', tellState);
+    win.on('enter-full-screen', tellState); win.on('leave-full-screen', tellState);
+    win.webContents.on('before-input-event', (e, input) => {
+      if (input.type === 'keyDown' && input.key === 'F11') { e.preventDefault(); win.setFullScreen(!win.isFullScreen()); }
+    });
+    void win.loadURL(target ? `${pageUrl('chat')}:${target}` : pageUrl('chat'));
+    this.main = win;
   }
 
+  private main: BrowserWindow | null = null;
+  private boundsTimer: NodeJS.Timeout | null = null;
+  private quitting = false;
+  /** Called when the app quits: the main window may really close now. */
+  allowClose(): void { this.quitting = true; }
+
+  private isDark(): boolean {
+    const mode = this.config.getSettings().uiMode;
+    return mode === 'dark' || (mode === 'system' && nativeTheme.shouldUseDarkColors);
+  }
+
+  /** Light / dark: Electron's theme source makes every page's prefers-color-scheme follow the setting. */
+  applyUiMode(): void {
+    const mode = this.config.getSettings().uiMode;
+    if (nativeTheme.themeSource !== mode) nativeTheme.themeSource = mode;
+    const win = this.main;
+    if (!win || win.isDestroyed()) return;
+    const dark = this.isDark();
+    try { win.setTitleBarOverlay(titleBarColors(dark)); } catch { /* not supported here */ }
+    win.setBackgroundColor(dark ? DARK_BG : LIGHT_BG);
+  }
+
+  private panelState(win: BrowserWindow): PanelState {
+    return { pinned: this.chatPinned, fullscreen: win.isFullScreen(), maximized: win.isMaximized() };
+  }
+
+  /** Main window: only hides (the conversation and a running task stay alive). */
   closePanelOf(webContentsId: number): void {
-    for (const [view, win] of this.panels) {
-      if (win.isDestroyed() || win.webContents.id !== webContentsId) continue;
-      // Chat only hides: a running task, its confirmations and the conversation stay alive.
-      if (view === 'chat') win.hide(); else win.close();
-    }
+    const win = this.main;
+    if (!win || win.isDestroyed() || win.webContents.id !== webContentsId) return;
+    if (win.isFullScreen()) win.setFullScreen(false);
+    win.hide();
   }
 
-  private fitToScreen(size: { width: number; height: number }): { width: number; height: number } {
-    const wa = this.displayFor(this.feet).workArea;
-    return { width: Math.min(size.width, wa.width - 20), height: Math.min(size.height, wa.height - 20) };
-  }
-
-  /** Re-shows the chat if it was hidden, without stealing focus (e.g. when a task needs confirmation). */
+  /** Shows the main window without stealing focus (e.g. when a task needs confirmation); opens it if needed. */
   revealChat(): void {
-    const win = this.panels.get('chat');
-    if (win && !win.isDestroyed() && !win.isVisible()) win.showInactive();
+    const win = this.main;
+    if (!win || win.isDestroyed()) { this.openPanel('chat'); return; }
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.showInactive();
   }
 
-  chatControl(webContentsId: number, action: string): { pinned: boolean; sizeIndex: number; sizeCount: number } {
-    const win = this.panels.get('chat');
-    const state = () => ({ pinned: this.chatPinned, sizeIndex: this.chatSize, sizeCount: WindowManager.CHAT_SIZES.length });
-    if (!win || win.isDestroyed() || win.webContents.id !== webContentsId) return state();
+  chatControl(webContentsId: number, action: string): PanelState {
+    const win = this.main;
+    if (!win || win.isDestroyed() || win.webContents.id !== webContentsId) return { pinned: this.chatPinned, fullscreen: false, maximized: false };
     if (action === 'toggle-pin') {
       this.chatPinned = !this.chatPinned;
       win.setAlwaysOnTop(this.chatPinned, ON_TOP_LEVEL);
-    } else if (action === 'bigger' || action === 'smaller') {
-      this.chatSize = Math.max(0, Math.min(WindowManager.CHAT_SIZES.length - 1, this.chatSize + (action === 'bigger' ? 1 : -1)));
-      const next = this.fitToScreen(WindowManager.CHAT_SIZES[this.chatSize] as { width: number; height: number });
-      const b = win.getBounds();
-      const wa = this.displayFor({ x: b.x + b.width / 2, y: b.y + b.height / 2 }).workArea;
-      // grow/shrink around the bottom-right corner area but keep the window on screen
-      let x = b.x + b.width - next.width; let y = b.y + b.height - next.height;
-      x = Math.min(wa.x + wa.width - next.width, Math.max(wa.x, x));
-      y = Math.min(wa.y + wa.height - next.height, Math.max(wa.y, y));
-      win.setBounds({ x: Math.round(x), y: Math.round(y), ...next }, true);
+    } else if (action === 'toggle-fullscreen') {
+      win.setFullScreen(!win.isFullScreen());
     } else if (action === 'hide') {
-      win.hide();
+      this.closePanelOf(webContentsId);
     }
-    return state();
-  }
-
-  /** Free resize from the chat's corner grip; keeps the top-left corner, stays on screen, respects minimum size. */
-  chatResize(webContentsId: number, width: number, height: number): void {
-    const win = this.panels.get('chat');
-    if (!win || win.isDestroyed() || win.webContents.id !== webContentsId) return;
-    const b = win.getBounds();
-    const wa = this.displayFor({ x: b.x + 10, y: b.y + 10 }).workArea;
-    const w = Math.round(Math.max(300, Math.min(width, wa.x + wa.width - b.x)));
-    const h = Math.round(Math.max(360, Math.min(height, wa.y + wa.height - b.y)));
-    if (w !== b.width || h !== b.height) win.setBounds({ x: b.x, y: b.y, width: w, height: h });
+    return this.panelState(win);
   }
 
   /** Every window that is allowed to talk to main over IPC. */
   allWebContentsIds(): number[] {
     const ids: number[] = [];
     if (this.pet && !this.pet.isDestroyed()) ids.push(this.pet.webContents.id);
-    for (const w of this.panels.values()) if (!w.isDestroyed()) ids.push(w.webContents.id);
+    if (this.main && !this.main.isDestroyed()) ids.push(this.main.webContents.id);
     return ids;
   }
 
   broadcast(channel: string, payload: unknown): void {
     if (this.pet && !this.pet.isDestroyed()) this.pet.webContents.send(channel, payload);
-    for (const w of this.panels.values()) if (!w.isDestroyed()) w.webContents.send(channel, payload);
+    if (this.main && !this.main.isDestroyed()) this.main.webContents.send(channel, payload);
   }
 
   sendToPet(channel: string, payload: unknown): void {

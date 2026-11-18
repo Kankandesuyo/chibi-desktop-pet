@@ -1,3 +1,4 @@
+import { buildUserBlock } from '../shared/profile';
 import { app, BrowserWindow, globalShortcut, screen } from 'electron';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -198,7 +199,7 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
       toolRows: document.querySelectorAll('.hx-assistant:not(.live) .hx-tool').length,
       stats: document.querySelector('.hx-stats')?.textContent ?? '',
       permission: document.querySelector('.hx-mode select')?.value ?? null,
-      avatar: !!document.querySelector('.hx-head img.hx-avatar'),
+      avatar: !!document.querySelector('.nav-brand img.hx-avatar'),
     }))()`)) as Record<string, unknown>;
     await chat.webContents.executeJavaScript(`[...document.querySelectorAll('.hx-tabs button')].find((b) => b.textContent === '轨迹')?.click(); 'ok'`);
     await sleep(600);
@@ -223,62 +224,90 @@ export async function runSmokeScenario(windows: WindowManager, dir: string, quit
     await chat.webContents.executeJavaScript(`(() => { const input = document.querySelector('.hx-composer input'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, ''); input.dispatchEvent(new Event('input', { bubbles: true })); return 'cleared'; })()`);
     log.push({ step: '13c_harness_ui', ui, trajectory, slashMenu });
     server.close();
-    // chat window controls
-    const b0 = chat.getBounds();
-    await chat.webContents.executeJavaScript('window.petAPI.panelControl("bigger")');
-    await sleep(400);
-    const b1 = chat.getBounds();
-    fs.writeFileSync(path.join(dir, '15_chat_bigger.png'), (await chat.webContents.capturePage()).toPNG());
-    await chat.webContents.executeJavaScript('window.petAPI.panelControl("smaller")');
-    await chat.webContents.executeJavaScript('window.petAPI.panelControl("smaller")');
-    await sleep(400);
-    const b2 = chat.getBounds();
-    fs.writeFileSync(path.join(dir, '16_chat_smaller.png'), (await chat.webContents.capturePage()).toPNG());
+    // ---- the main window: one window for everything ----
+    const shot = async (name: string): Promise<void> => { fs.writeFileSync(path.join(dir, `${name}.png`), (await chat.webContents.capturePage()).toPNG()); };
+    const js = <T>(code: string): Promise<T> => chat.webContents.executeJavaScript(code) as Promise<T>;
+    const clickNav = (label: string): Promise<unknown> => js(`[...document.querySelectorAll('.nav-item')].find((b) => b.textContent.includes(${JSON.stringify(label)}))?.click(); 'ok'`);
+    const pageText = (): Promise<string> => js('[...document.querySelectorAll(".page")].filter((p) => !p.hidden).map((p) => p.innerText).join("\\n")');
+    const frame = { resizable: chat.isResizable(), maximizable: chat.isMaximizable(), fullscreenable: chat.isFullScreenable(), inTaskbar: true, minSize: chat.getMinimumSize() };
+    await js('window.petAPI.panelControl("toggle-fullscreen")');
+    await sleep(900);
+    const full = chat.isFullScreen();
+    await shot('15_fullscreen');
+    await js('window.petAPI.panelControl("toggle-fullscreen")');
+    await sleep(900);
+    chat.maximize(); await sleep(600);
+    const maximized = chat.isMaximized();
+    await shot('15b_maximized');
+    chat.unmaximize(); await sleep(400);
     const pinnedBefore = chat.isAlwaysOnTop();
-    await chat.webContents.executeJavaScript('window.petAPI.panelControl("toggle-pin")');
+    await js('window.petAPI.panelControl("toggle-pin")');
     const pinnedAfter = chat.isAlwaysOnTop();
-    await chat.webContents.executeJavaScript('document.querySelector(".hx-head-actions button:last-child").click()');
+    await js('window.petAPI.panelControl("toggle-pin")');
+    chat.close();                                   // the ✕ button: only hides
     await sleep(300);
-    chat.webContents.send('noop');
-    const g = (await chat.webContents.executeJavaScript('(() => { const r = document.querySelector(".resize-grip").getBoundingClientRect(); return [r.x + 8, r.y + 8]; })()')) as [number, number];
-    const before = chat.getBounds();
-    await chat.webContents.executeJavaScript(`window.__grip=[]; const gg=document.querySelector('.resize-grip'); ['pointerdown','pointermove','pointerup','mousedown','mousemove'].forEach(t=>gg.addEventListener(t,e=>window.__grip.push(t+':'+e.screenX))); document.addEventListener('pointermove',e=>window.__grip.push('doc:'+e.screenX)); 'ok'`);
-    const wb = chat.getBounds();
-    chat.webContents.sendInputEvent({ type: 'mouseDown', x: g[0], y: g[1], globalX: wb.x + g[0], globalY: wb.y + g[1], button: 'left', clickCount: 1 });
-    for (let i = 1; i <= 10; i++) { chat.webContents.sendInputEvent({ type: 'mouseMove', x: g[0] + i * 12, y: g[1] + i * 9, globalX: wb.x + g[0] + i * 12, globalY: wb.y + g[1] + i * 9, button: 'left' }); await sleep(30); }
-    chat.webContents.sendInputEvent({ type: 'mouseUp', x: g[0] + 120, y: g[1] + 90, button: 'left', clickCount: 1 });
-    await sleep(300);
-    const afterGrip = chat.getBounds();
-    log.push({ step: '15b_grip', before: [before.width, before.height], after: [afterGrip.width, afterGrip.height], events: (await chat.webContents.executeJavaScript('window.__grip.slice(0,12)')) as string[], elAt: (await chat.webContents.executeJavaScript(`document.elementFromPoint(${g[0]},${g[1]})?.className`)) as string });
     const hidden = !chat.isVisible() && !chat.isDestroyed();
     windows.revealChat();
     await sleep(300);
-    log.push({ step: '15_chat_controls', sizes: [b0.width, b1.width, b2.width], pinnedBefore, pinnedAfter, hiddenKeepsWindow: hidden, revealed: chat.isVisible(),
-      historyKept: (await chat.webContents.executeJavaScript('document.querySelectorAll(".hx-msg").length')) as number });
+    log.push({ step: '15_main_window', frame, full, maximized, pinnedBefore, pinnedAfter, hiddenKeepsWindow: hidden, revealed: chat.isVisible(),
+      historyKept: await js<number>('document.querySelectorAll(".hx-msg").length'),
+      ctxMeter: await js<string>('document.querySelector(".hx-ctx")?.textContent ?? ""') });
+
+    // Settings open in the same window, as a page.
+    const windowsBefore = BrowserWindow.getAllWindows().length;
     windows.openPanel('settings');
-    await sleep(2500);
-    const settingsWin = BrowserWindow.getAllWindows().find((w) => w !== pet && w !== chat);
-    if (settingsWin) {
-      await settingsWin.webContents.executeJavaScript('document.querySelectorAll("h2")[2]?.scrollIntoView(); "ok"');
-      await sleep(300);
-      fs.writeFileSync(path.join(dir, '14_agent_settings.png'), (await settingsWin.webContents.capturePage()).toPNG());
-      const text = (await settingsWin.webContents.executeJavaScript('document.body.innerText')) as string;
-      const text0 = text;
-      await settingsWin.webContents.executeJavaScript('[...document.querySelectorAll("h3")].find((h) => h.textContent === "技能")?.scrollIntoView(); "ok"');
-      await sleep(300);
-      fs.writeFileSync(path.join(dir, '14b_skills_rules_hooks.png'), (await settingsWin.webContents.capturePage()).toPNG());
-      log.push({ step: '14b_hotkey', accelerator: config.getSettings().globalHotkey, registered: globalShortcut.isRegistered(config.getSettings().globalHotkey), settingShown: text0.includes('呼出她的快捷键') });
-      log.push({ step: '14_settings', hasPersonaSection: text.includes('她自己') && text.includes('自言自语'), hasAgentSection: text.includes('智能体'), memoryShown: text.includes('记忆'), tasksShown: text.includes('建一个叫'), phase3: { skills: text.includes('打开技能文件夹') && text.includes('照片按日期归档'), rules: text.includes('保存权限规则'), hooks: text.includes('没有配置钩子'), instructions: text.includes('编辑长期守则'), schedules: text.includes('还没有定时任务') } });
-      // Theme: switching in settings recolours every window at once; "auto" follows the character.
+    await sleep(800);
+    const text = await pageText();
+    await shot('14_settings_page');
+    await js(`[...document.querySelectorAll('.page-head .hx-tabs button')].find((b) => b.textContent === '智能体')?.click(); 'ok'`);
+    await sleep(700);
+    await shot('14b_agent_settings');
+    log.push({ step: '14b_hotkey', accelerator: config.getSettings().globalHotkey, registered: globalShortcut.isRegistered(config.getSettings().globalHotkey), settingShown: text.includes('呼出她的快捷键') });
+    log.push({ step: '14_settings', sameWindow: BrowserWindow.getAllWindows().length === windowsBefore, hasPersonaSection: text.includes('她自己') && text.includes('自言自语'), hasAgentSection: text.includes('智能体'), memoryShown: text.includes('记忆'), uiModeRow: text.includes('窗口外观'), contextWindowRow: text.includes('上下文窗口'), phase3: { rules: text.includes('保存权限规则'), hooks: text.includes('没有配置钩子'), instructions: text.includes('编辑长期守则') } });
+
+    // The other pages.
+    await clickNav('定时任务'); await sleep(600);
+    const schedText = await pageText();
+    await js(`[...document.querySelectorAll('.btn.primary')].find((b) => b.textContent.includes('新建定时任务'))?.click(); 'ok'`);
+    await sleep(300);
+    const schedForm = await js<number>('document.querySelectorAll(".form-card").length');
+    await shot('18_schedules');
+    await clickNav('技能'); await sleep(900);
+    const skillText = await pageText();
+    await shot('19_skills');
+    await clickNav('我的资料'); await sleep(500);
+    const profileText = await pageText();
+    await shot('20_profile');
+    const saved = await js<{ callMe: string }>(`window.petAPI.updateSettings({ profile: { ...${JSON.stringify(config.getSettings().profile)}, callMe: '测试员' } }).then((s) => s.profile)`);
+    const personaHasUser = (buildUserBlock(config.getSettings().profile) ?? '').includes('请称呼用户为「测试员」');
+    await js(`window.petAPI.updateSettings({ profile: ${JSON.stringify(config.getSettings().profile)} }).then(() => 'ok')`);
+    await js(`window.petAPI.updateSettings({ profile: { ...${JSON.stringify(config.getSettings().profile)}, callMe: '' } }).then(() => 'ok')`);
+    // Dark mode.
+    const bg = (): Promise<string> => js('getComputedStyle(document.body).backgroundColor');
+    await js('window.petAPI.updateSettings({ uiMode: "light" }).then(() => "ok")');
+    await sleep(500);
+    await clickNav('会话'); await sleep(300);
+    await shot('21_light_chat');
+    const light = await bg();
+    await js('window.petAPI.updateSettings({ uiMode: "dark" }).then(() => "ok")');
+    await sleep(500);
+    await clickNav('会话'); await sleep(300);
+    const dark = await bg();
+    await shot('21_dark_chat');
+    await js('window.petAPI.updateSettings({ uiMode: "system" }).then(() => "ok")');
+    await sleep(300);
+    log.push({ step: '18_pages', schedForm, schedules: schedText.includes('只查看和汇报'),
+      skills: skillText.includes('照片按日期归档'), profile: profileText.includes('关于我') && profileText.includes('勿扰时段'), savedCallMe: saved.callMe, personaHasUser, light, dark });
+
+    // Theme: switching recolours every window at once; "auto" follows the character.
+    {
+      const settingsWin = chat;
       const accent = (w: BrowserWindow): Promise<string> => w.webContents.executeJavaScript('document.documentElement.dataset.theme + " " + getComputedStyle(document.documentElement).getPropertyValue("--orange").trim()') as Promise<string>;
-      const themeBefore = [await accent(settingsWin), await accent(chat)];
+      const themeBefore = [await accent(chat)];
       await settingsWin.webContents.executeJavaScript('window.petAPI.updateSettings({ theme: "blue" }).then(() => "ok")');
       await sleep(500);
-      await settingsWin.webContents.executeJavaScript('window.scrollTo(0, 0); "ok"');
-      await sleep(200);
-      fs.writeFileSync(path.join(dir, '16_theme_blue_settings.png'), (await settingsWin.webContents.capturePage()).toPNG());
       fs.writeFileSync(path.join(dir, '16_theme_blue_chat.png'), (await chat.webContents.capturePage()).toPNG());
-      const themeBlue = [await accent(settingsWin), await accent(chat), await accent(pet)];
+      const themeBlue = [await accent(chat), await accent(pet)];
       await settingsWin.webContents.executeJavaScript('window.petAPI.updateSettings({ theme: "auto" }).then(() => "ok")');
       await sleep(400);
       // Tray / window icon follows the character (checked through the icon file each character names).

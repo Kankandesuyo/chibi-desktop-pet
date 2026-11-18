@@ -9,6 +9,8 @@ export interface TurnStats {
   inputTokens?: number;
   outputTokens?: number;
   cachedTokens?: number;
+  /** Largest prompt sent in this turn (tokens): how full the context window got. */
+  peakInputTokens?: number;
 }
 
 export interface SessionSummary {

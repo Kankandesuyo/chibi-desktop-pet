@@ -27,8 +27,14 @@ export interface AgentSettings {
   toolProtocol: ToolProtocol;
   /** Upper bound on tool calls in one task. */
   maxSteps: number;
+  /** The model's context window in tokens: long tasks are compacted before they reach it. */
+  contextWindow: number;
   vision: { baseUrl: string; model: string; hasApiKey: boolean };
 }
+
+/** Context window presets offered in settings (tokens). */
+export const CONTEXT_WINDOWS = [32000, 64000, 128000, 256000, 1000000] as const;
+export const DEFAULT_CONTEXT_WINDOW = 64000;
 
 export type ConfirmDecision = 'allow' | 'allow_task' | 'deny';
 
@@ -157,3 +163,12 @@ export interface AgentInfo {
   logDir: string;
   pluginDir: string;
 }
+
+/** Operations of the main window's 定时任务 / 技能 pages. */
+export type AgentManageOp =
+  | { type: 'scheduleCreate'; name: string; prompt: string; trigger: ScheduleTrigger }
+  | { type: 'skillRead'; name: string }
+  | { type: 'skillSave'; name: string; description: string; body: string }
+  | { type: 'skillDelete'; name: string };
+
+export interface AgentManageResult { ok: boolean; error?: string; info?: AgentInfo; text?: string }

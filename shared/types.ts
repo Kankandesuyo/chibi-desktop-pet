@@ -1,9 +1,10 @@
+import type { UserProfile } from './profile';
 import type { CharacterId, CustomCharacterInfo, ThemeChoice } from './characters';
 import type { MonologueLevel } from './persona';
 import type { ChatCompose } from './fileDrop';
 import type { SessionStatsView, SessionSummary, TrajectoryEvent } from './harness';
 /** Types and constants shared by the Electron main process and the renderer. */
-import type { AgentCommandResult, AgentEvent, AgentInfo, AgentPetSignal, AgentSettings, AgentStepView, ConfirmDecision, ConfirmRequest, McpServerConfig, PlanStepView } from './agentTypes';
+import type { AgentCommandResult, AgentEvent, AgentInfo, AgentManageOp, AgentManageResult, AgentPetSignal, AgentSettings, AgentStepView, ConfirmDecision, ConfirmRequest, McpServerConfig, PlanStepView } from './agentTypes';
 
 export const PET_STATES = [
   'idle', 'blink', 'lookAround', 'walkLeft', 'walkRight', 'run', 'turnLeft', 'turnRight', 'jump',
@@ -39,6 +40,8 @@ export interface AiPublicConfig {
   hasApiKey: boolean;
 }
 
+export type UiMode = 'system' | 'light' | 'dark';
+
 export interface Settings {
   /** Pet scale, 0.4–1.4 (1 = 220 px tall). */
   size: number;
@@ -68,6 +71,10 @@ export interface Settings {
   personaTraits: string;
   /** How often she talks to herself. */
   monologue: MonologueLevel;
+  /** Light / dark look of the main window ('system' follows Windows). */
+  uiMode: UiMode;
+  /** The local user's profile (我的资料). */
+  profile: UserProfile;
   ai: AiPublicConfig;
   agent: AgentSettings;
 }
@@ -92,8 +99,8 @@ export type AiStreamEvent =
   | { type: 'done'; requestId: string; result: AiReplyMeta }
   | { type: 'error'; requestId: string; message: string };
 
-export type PanelAction = 'state' | 'toggle-pin' | 'bigger' | 'smaller' | 'hide';
-export interface PanelState { pinned: boolean; sizeIndex: number; sizeCount: number }
+export type PanelAction = 'state' | 'toggle-pin' | 'toggle-fullscreen' | 'hide';
+export interface PanelState { pinned: boolean; fullscreen: boolean; maximized: boolean }
 
 export type PetNotice = AiReplyMeta | { talking: boolean } | AgentPetSignal;
 
@@ -138,8 +145,8 @@ export interface PetAPI {
   notifyPet(meta: AiReplyMeta | { talking: boolean }): void;
   /** Chat window controls: pin on top, bigger/smaller, hide (keeps running tasks). */
   panelControl(action: PanelAction): Promise<PanelState>;
-  /** Drag-resize from the corner grip (transparent windows cannot be resized by their border on Windows). */
-  panelResize(width: number, height: number): void;
+  /** Main window state changed (maximized / full screen). */
+  onPanelState(cb: (s: PanelState) => void): () => void;
   // Agent (tool-using) mode
   agentRun(requestId: string, messages: ChatMessage[], stats: PetStats): void;
   agentAbort(requestId: string): void;
@@ -149,6 +156,14 @@ export interface PetAPI {
   agentMemory(op: { type: 'update'; id: string; text: string } | { type: 'delete'; id: string }): Promise<AgentInfo>;
   agentPickFolder(): Promise<string | null>;
   agentPlugins(op: { type: 'approve'; name: string; approve: boolean } | { type: 'approveHooks'; approve: boolean } | { type: 'scheduleToggle'; name: string; approve: boolean } | { type: 'scheduleDelete'; name: string } | { type: 'reload' } | { type: 'setMcp'; servers: McpServerConfig[] }): Promise<AgentInfo>;
+  /** 定时任务 / 技能 pages of the main window. */
+  agentManage(op: AgentManageOp): Promise<AgentManageResult>;
+  /** The user's avatar as a data URL ('' = none). */
+  userAvatar(): Promise<string>;
+  /** Saves (data URL of a PNG/JPEG/WebP picture) or removes (null) the user's avatar. */
+  userAvatarSet(dataUrl: string | null): Promise<{ ok: boolean; error?: string; settings: Settings }>;
+  /** The main process asks the main window to show a page (e.g. "settings"). */
+  onNavigate(cb: (page: string) => void): () => void;
   agentOpenFolder(kind: 'logs' | 'plugins' | 'skills' | 'instructions' | 'hooks'): void;
   /** A chat slash command; null when the text is not one (send it as a message instead). */
   agentCommand(text: string): Promise<AgentCommandResult | null>;

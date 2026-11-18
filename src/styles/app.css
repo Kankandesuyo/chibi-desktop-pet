@@ -7,6 +7,11 @@
   --paper: #fffaf3;
   --accent-rgb: 240, 122, 42;
   --warn: #b9550d;
+  --surface: #ffffff;
+  --chip: rgba(0, 0, 0, 0.05);
+  --warn-bg: #fffaf0;
+  --danger-bg: #fff5f3;
+  --nav: #f6efe7;
   font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
   color: var(--ink);
 }
@@ -20,6 +25,7 @@
   --paper: #f8faff;
   --accent-rgb: 63, 99, 200;
   --warn: #8a5a00;
+  --nav: #edf1fb;
 }
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
@@ -40,8 +46,7 @@ body[data-view="pet"] { background: transparent; }
 @keyframes bubble-in { from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.9); } }
 
 
-/* ---------- settings window ---------- */
-body[data-view="settings"] { background: var(--cream); overflow-y: auto; }
+/* ---------- settings (a page of the main window) ---------- */
 .settings { padding: 8px 20px 24px; font-size: 14px; }
 .settings h2 { margin: 18px 0 8px; font-size: 15px; color: var(--orange); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
@@ -50,8 +55,8 @@ body[data-view="settings"] { background: var(--cream); overflow-y: auto; }
 .row.col > span:first-child { flex: none; font-size: 13px; }
 .row input[type="range"] { flex: 1; accent-color: var(--orange); }
 .row input[type="checkbox"] { margin-left: auto; width: 18px; height: 18px; accent-color: var(--orange); }
-.row input[type="text"], .row input[type="password"] { padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
-.row textarea { padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; font: 12.5px/1.5 "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace; resize: vertical; }
+.row input[type="text"], .row input[type="password"] { padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; font: inherit; color: inherit; background: var(--surface); }
+.row textarea { padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; color: inherit; background: var(--surface); font: 12.5px/1.5 "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace; resize: vertical; }
 .row textarea::placeholder { color: var(--ink); opacity: 0.35; }
 .settings code { padding: 0 4px; border-radius: 4px; background: rgba(var(--accent-rgb), 0.1); font-size: 12px; }
 .hook-state { margin: 4px 0; padding: 6px 10px; border-radius: 8px; font-size: 13px; background: rgba(0, 0, 0, 0.04); }
@@ -71,7 +76,7 @@ body[data-view="settings"] { background: var(--cream); overflow-y: auto; }
 .settings h3 { margin: 14px 0 4px; font-size: 14px; }
 .settings .hint { display: block; opacity: 0.7; font-size: 12px; line-height: 1.5; margin-bottom: 4px; }
 .row.compact { padding: 3px 0; }
-.row select { flex: 1; padding: 6px; border: 1.5px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+.row select { flex: 1; padding: 6px; border: 1.5px solid var(--line); border-radius: 8px; font: inherit; color: inherit; background: var(--surface); }
 .plain-list { margin: 4px 0; padding: 0; list-style: none; font-size: 13px; user-select: text; }
 .plain-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px dotted var(--line); word-break: break-all; }
 .plain-list li small { flex-basis: 100%; opacity: 0.65; }
@@ -87,9 +92,6 @@ body[data-view="settings"] { background: var(--cream); overflow-y: auto; }
 .flash { position: sticky; bottom: 8px; margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--orange); color: #fff; text-align: center; }
 .row:has(> input[type="checkbox"]) > span:first-child { flex: 1 1 auto; }
 .row select { min-width: 0; }
-.resize-grip { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; cursor: nwse-resize; z-index: 5; -webkit-app-region: no-drag;
-  background: linear-gradient(135deg, transparent 50%, rgba(var(--accent-rgb), 0.55) 50%, rgba(var(--accent-rgb), 0.55) 60%, transparent 60%, transparent 72%, rgba(var(--accent-rgb), 0.55) 72%, rgba(var(--accent-rgb), 0.55) 82%, transparent 82%); border-bottom-right-radius: 12px; }
-
 /* ---- screen highlight overlay (the pet pointing at something) ---- */
 body[data-view="highlight"] { background: transparent; pointer-events: none; }
 .highlight-root { position: fixed; inset: 0; pointer-events: none; }

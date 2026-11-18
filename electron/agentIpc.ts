@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { dialog, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
-import type { AgentEvent, AgentInfo, ConfirmDecision } from '../shared/agentTypes';
+import type { AgentEvent, AgentInfo, AgentManageResult, ConfirmDecision } from '../shared/agentTypes';
 import { IPC } from '../shared/constants';
 import { dropActions, dropHeader } from '../shared/fileDrop';
 import { inspectDrop } from './fileDrop';
@@ -66,6 +67,34 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
     if (o.type === 'update' && typeof o.id === 'string' && typeof o.text === 'string') agent.memory.update(o.id, o.text);
     return info();
   }, info);
+  // The main window's 定时任务 / 技能 pages. These are the user's own clicks, so no confirmation card.
+  handle<AgentManageResult>(IPC.agentManage, async (op) => {
+    const o = (op ?? {}) as Record<string, unknown>;
+    try {
+      if (o.type === 'scheduleCreate') {
+        agent.scheduler.add({ name: String(o.name ?? ''), prompt: String(o.prompt ?? ''), trigger: (o.trigger ?? {}) as Parameters<typeof agent.scheduler.add>[0]['trigger'] });
+        return { ok: true, info: info() };
+      }
+      if (o.type === 'skillRead' && typeof o.name === 'string') {
+        const sk = agent.skills.get(o.name);
+        if (!sk) return { ok: false, error: '找不到这个技能' };
+        return { ok: true, text: fs.readFileSync(path.join(sk.dir, 'SKILL.md'), 'utf8') };
+      }
+      if (o.type === 'skillSave') {
+        agent.skills.save(String(o.name ?? ''), String(o.description ?? ''), String(o.body ?? ''));
+        return { ok: true, info: info() };
+      }
+      if (o.type === 'skillDelete' && typeof o.name === 'string') {
+        const sk = agent.skills.get(o.name);
+        if (!sk || sk.source !== 'user') return { ok: false, error: '内置技能不能删除' };
+        await shell.trashItem(sk.dir);          // to the recycle bin, so it can be restored
+        return { ok: true, info: info() };
+      }
+      return { ok: false, error: '未知操作' };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }, () => ({ ok: false, error: '不可用' }));
   handle<string | null>(IPC.agentPickFolder, async () => {
     const r = await dialog.showOpenDialog({ title: '选择允许桌宠操作的文件夹', properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0] ?? null;

@@ -73,8 +73,16 @@ export class AgentController {
   private jsonCallSeq = 0;
   /** How many helpers each running turn has started. */
   private readonly helpersUsed = new Map<string, number>();
-  /** Size budget for one task's conversation, read by the compaction plugin (tests lower it). */
-  compactOptions: CompactOptions = DEFAULT_COMPACT;
+  /** Fixed size budget for one task's conversation (tests set it). Unset = derived from the context window. */
+  private compactOverride: CompactOptions | undefined;
+  set compactOptions(o: CompactOptions) { this.compactOverride = o; }
+  /** Read by the compaction plugin: ~70% of the context window, at ~1.6 characters per token (mixed CJK text). */
+  get compactOptions(): CompactOptions {
+    if (this.compactOverride) return this.compactOverride;
+    const window = this.deps.settings().contextWindow;
+    if (!window) return DEFAULT_COMPACT;
+    return { ...DEFAULT_COMPACT, maxChars: Math.max(20_000, Math.round(window * 0.7 * 1.6)) };
+  }
 
   get recaps(): TaskRecaps { return this.deps.recaps; }
 
@@ -168,6 +176,7 @@ export class AgentController {
     const addUsage = (u: LlmTurn['usage']): void => {
       if (!u) return;
       turnStats.inputTokens = (turnStats.inputTokens ?? 0) + u.input;
+      turnStats.peakInputTokens = Math.max(turnStats.peakInputTokens ?? 0, u.input);
       turnStats.outputTokens = (turnStats.outputTokens ?? 0) + u.output;
       if (u.cached !== undefined) turnStats.cachedTokens = (turnStats.cachedTokens ?? 0) + u.cached;
     };

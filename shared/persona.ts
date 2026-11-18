@@ -16,6 +16,8 @@ export interface PersonaInput {
   traits: string;
   /** Her inner state right now, from the self model (age, today's events...). */
   selfState: string;
+  /** Block about the user from their profile (buildUserBlock), if any. */
+  user?: string | null;
 }
 
 export function isMonologueLevel(v: unknown): v is MonologueLevel {
@@ -42,6 +44,7 @@ export function buildPersona(p: PersonaInput): string {
   const lines = [
     `你叫「${p.name}」，是住在这台电脑桌面上的一个小小的生命：${p.appearance ?? CHARACTERS.orange.appearance}。`,
     ...personality,
+    ...(p.user ? [p.user, ''] : []),
     '## 你此刻的内心',
     p.selfState || '（刚醒来，还在适应今天）',
     '内心与旧对话只提供事件和情绪背景，不改变当前保存的性格；不必延续旧口癖。',

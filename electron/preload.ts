@@ -19,6 +19,7 @@ const C = {
   charactersCreate: 'characters:create',
   filesDropped: 'pet:files-dropped', chatTakeCompose: 'chat:take-compose', cursor: 'evt:cursor', chatCompose: 'evt:chat-compose',
   agentCommand: 'agent:command', chatFocus: 'evt:chat-focus',
+  agentManage: 'agent:manage', userAvatar: 'user:avatar', userAvatarSet: 'user:avatar-set', navigate: 'evt:navigate',
 } as const;
 
 function listen<T>(channel: string) {
@@ -40,7 +41,7 @@ const api: PetAPI = {
   openSettings: () => ipcRenderer.send(C.openSettings),
   closePanel: () => ipcRenderer.send(C.closePanel),
   panelControl: (action) => ipcRenderer.invoke(C.panelControl, action),
-  panelResize: (width, height) => ipcRenderer.send(C.panelResize, width, height),
+  onPanelState: listen('evt:panel-state'),
   openClaude: () => ipcRenderer.send(C.openClaude),
   saveStats: (stats) => ipcRenderer.send(C.saveStats, stats),
   petEvent: (kind) => ipcRenderer.send(C.petEvent, kind),
@@ -70,6 +71,10 @@ const api: PetAPI = {
   sharedAbort: () => ipcRenderer.invoke('chat:shared-abort'),
   sharedClear: () => ipcRenderer.invoke('chat:shared-clear'),
   onSharedChat: listen('evt:shared-chat'),
+  agentManage: (op) => ipcRenderer.invoke(C.agentManage, op),
+  userAvatar: () => ipcRenderer.invoke(C.userAvatar),
+  userAvatarSet: (dataUrl) => ipcRenderer.invoke(C.userAvatarSet, dataUrl),
+  onNavigate: listen(C.navigate),
   agentOpenFolder: (kind) => ipcRenderer.send(C.agentOpenFolder, kind),
   agentCommand: (text) => ipcRenderer.invoke(C.agentCommand, text),
   onAgentEvent: listen(C.agentEvent),

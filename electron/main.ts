@@ -7,6 +7,7 @@ import { OpenAiCompatibleClient } from './agent/llm';
 import { createElectronPlatform } from './agent/platform/electronPlatform';
 import { registerAgentHandlers } from './agentIpc';
 import { buildMonologuePrompt, buildPersona } from '../shared/persona';
+import { buildUserBlock, inQuietHours } from '../shared/profile';
 import { CHARACTERS, characterMeta, isBuiltinCharacter, type CharacterId } from '../shared/characters';
 import { CustomCharacters, parseUserCharacterPath } from './customCharacters';
 import { IPC } from '../shared/constants';
@@ -103,7 +104,7 @@ if (!app.requestSingleInstanceLock()) {
     const self = new SelfModel(path.join(app.getPath('userData'), 'self.json'));
     const persona = (): string => {
       const s = config.getSettings();
-      return buildPersona({ name: s.petName, appearance: characterMeta(s.character, characters.list()).appearance, traits: s.personaTraits, selfState: self.summary() });
+      return buildPersona({ name: s.petName, appearance: characterMeta(s.character, characters.list()).appearance, traits: s.personaTraits, selfState: self.summary(), user: buildUserBlock(s.profile) });
     };
     const activity = { streaming: 0 };
     const life: PetLife = { self, persona, activity, characters };
@@ -155,7 +156,7 @@ if (!app.requestSingleInstanceLock()) {
     app.on('will-quit', () => clearInterval(scheduleTimer));
     agent.onScheduledDone((task, text, ok) => {
       if (!Notification.isSupported()) return;
-      const n = new Notification({ title: `⏰ ${task.name}${ok ? '' : '（没有完成）'}`, body: text.slice(0, 160), icon: characterIcon(config.getSettings().character) });
+      const n = new Notification({ title: `⏰ ${task.name}${ok ? '' : '（没有完成）'}`, body: text.slice(0, 160), icon: characterIcon(config.getSettings().character), silent: inQuietHours(config.getSettings().profile) });
       n.on('click', () => { windows.setPetVisible(true); windows.focusChat(); });
       n.show();
     });
@@ -163,7 +164,7 @@ if (!app.requestSingleInstanceLock()) {
     const monologue = new Monologue({
       level: () => config.getSettings().monologue,
       aiReady: () => config.getSettings().aiEnabled && !!config.getApiKey(),
-      canSpeak: () => windows.isPetVisible() && !windows.isDragging() && !agent.controller.isRunning() && activity.streaming === 0,
+      canSpeak: () => !inQuietHours(config.getSettings().profile) && windows.isPetVisible() && !windows.isDragging() && !agent.controller.isRunning() && activity.streaming === 0,
       idleSeconds: () => powerMonitor.getSystemIdleTime(),
       generate: (signal) => {
         const said = self.recentSaid();
@@ -178,6 +179,7 @@ if (!app.requestSingleInstanceLock()) {
     void agent.plugins.reloadAll().then(() => agent.applyGroups());
     app.on('will-quit', () => { void agent.shutdown(); });
     app.on('second-instance', () => windows.setPetVisible(true));
+    windows.applyUiMode();
     windows.createPetWindow();
     createTray(windows, quit, config.getSettings().character);
     // The chat window shows her face next to her replies (it follows the chosen character).
@@ -194,7 +196,7 @@ if (!app.requestSingleInstanceLock()) {
     life.onSettings();
     app.setLoginItemSettings({ openAtLogin: config.getSettings().launchAtLogin });
 
-    app.on('before-quit', () => { quitting = true; config.flush(); });
+    app.on('before-quit', () => { quitting = true; windows.allowClose(); config.flush(); });
     // Closing a panel must not end the app; only "退出程序" does.
     app.on('window-all-closed', () => { if (quitting) app.quit(); });
 

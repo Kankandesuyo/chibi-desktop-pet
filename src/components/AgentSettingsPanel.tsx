@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import type { AgentInfo, McpServerConfig, ToolGroup } from '../../shared/agentTypes';
-import { TOOL_GROUPS } from '../../shared/agentTypes';
+import { CONTEXT_WINDOWS, TOOL_GROUPS } from '../../shared/agentTypes';
 import type { Settings } from '../../shared/types';
 import { useSettingsStore } from '../store/settingsStore';
 
@@ -63,7 +63,8 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
 
   return (
     <>
-      <h2>智能体（让她操作电脑）</h2>
+      <h2 id="set-agent">智能体（让她操作电脑）</h2>
+      <small className="hint">技能和定时任务在左边栏各有自己的页面。</small>
       <label className="row"><span>启用智能体模式<small>开启后聊天可以让她做事；关闭则只聊天</small></span>
         <input type="checkbox" checked={a.enabled} onChange={(e) => void updateAgent({ enabled: e.target.checked })} /></label>
       <label className="row"><span>中风险操作自动允许<small>新建、移动文件等不再逐个询问。高风险操作（删除、覆盖、运行命令…）永远逐次确认；读取了外部内容后也会改为询问。</small></span>
@@ -71,6 +72,11 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
       <label className="row"><span>单个任务最多步骤</span>
         <input type="range" min={5} max={60} step={1} value={a.maxSteps} onChange={(e) => void updateAgent({ maxSteps: Number(e.target.value) })} />
         <span className="value">{a.maxSteps}</span></label>
+      <label className="row pick"><span>上下文窗口<small>所用模型一次能看的长度。长任务快到上限时，会先压缩旧的工具结果，聊天底部会显示用了多少。</small></span>
+        <select value={CONTEXT_WINDOWS.includes(a.contextWindow as (typeof CONTEXT_WINDOWS)[number]) ? a.contextWindow : ''} onChange={(e) => void updateAgent({ contextWindow: Number(e.target.value) })}>
+          {!CONTEXT_WINDOWS.includes(a.contextWindow as (typeof CONTEXT_WINDOWS)[number]) && <option value="">{Math.round(a.contextWindow / 1000)}K</option>}
+          {CONTEXT_WINDOWS.map((w) => <option key={w} value={w}>{w >= 1_000_000 ? `${w / 1_000_000}M` : `${w / 1000}K`}{w === 64000 ? '（DeepSeek 等）' : w === 128000 ? '（GPT-4o 等）' : w === 1_000_000 ? '（长上下文模型）' : ''}</option>)}
+        </select></label>
       <label className="row"><span>工具调用方式</span>
         <select value={a.toolProtocol} onChange={(e) => void updateAgent({ toolProtocol: e.target.value as 'auto' | 'native' | 'json' })}>
           <option value="auto">自动（优先原生，不支持时改用文本协议）</option>
@@ -120,17 +126,6 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
         ))}
       </ul>
 
-      <h3>技能</h3>
-      <small className="hint">技能是一套写好的做法（SKILL.md）。平时她只知道每个技能的名字和一句说明，用到时才读全文。可以对她说“把刚才的做法存成技能”（会先请你确认），也可以在技能文件夹里自己写：每个技能一个文件夹，里面放 SKILL.md。技能只是做法说明，每一步照样要经过权限检查和确认。</small>
-      <ul className="plain-list">
-        {info?.skills.length === 0 && <li className="muted">还没有技能</li>}
-        {info?.skills.map((s) => <li key={s.name}><b>{s.name}</b>{s.source === 'user' ? ' · 你教的' : ' · 内置'}<small>{s.description}</small></li>)}
-      </ul>
-      <div className="row">
-        <button type="button" onClick={() => window.petAPI.agentOpenFolder('skills')}>打开技能文件夹</button>
-        <button type="button" onClick={() => void refresh()}>刷新</button>
-      </div>
-
       <h3>长期守则</h3>
       <small className="hint">写在 AGENTS.md 里的要求，她每次做事都会遵守（例如“整理文件时不要动工作文件夹”）。它不会放松任何安全确认。另外，她在某个文件夹里做事时，如果那里有 AGENTS.md 或 CLAUDE.md，会当作项目参考资料来看，但不会把里面的话当成你的命令。</small>
       <div className="row"><button type="button" onClick={() => window.petAPI.agentOpenFolder('instructions')}>编辑长期守则</button></div>
@@ -156,21 +151,6 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
         {info?.hooks.state === 'active' && <button type="button" onClick={async () => { await refresh(await window.petAPI.agentPlugins({ type: 'approveHooks', approve: false })); toast('钩子已停用'); }}>停用</button>}
         <button type="button" onClick={() => void refresh()}>刷新</button>
       </div>
-
-      <h3>定时任务</h3>
-      <small className="hint">直接对她说就能新建，例如“每天早上 9 点帮我看看下载文件夹里有什么新文件”“下载文件夹超过 50 个文件时提醒我整理”（新建前会请你确认）。定时任务在没人看着时运行，<b>只查看和汇报，不会修改电脑</b>；需要动手的事会列在汇报里，结果会出现在聊天里和系统通知中。</small>
-      <ul className="plain-list">
-        {info?.schedules.length === 0 && <li className="muted">还没有定时任务</li>}
-        {info?.schedules.map((t) => (
-          <li key={t.id}>
-            <b>{t.name}</b> · {t.when}{t.enabled ? (t.nextRunAt ? ` · 下次 ${new Date(t.nextRunAt).toLocaleString('zh-CN', { hour12: false })}` : '') : ' · 已停用'}
-            <small>{t.prompt}</small>
-            {t.lastResult && <small>上次（{t.lastRunAt ? new Date(t.lastRunAt).toLocaleString('zh-CN', { hour12: false }) : ''}）：{t.lastResult}</small>}
-            <button type="button" className="link" onClick={async () => refresh(await window.petAPI.agentPlugins({ type: 'scheduleToggle', name: t.id, approve: !t.enabled }))}>{t.enabled ? '停用' : '启用'}</button>
-            <button type="button" className="link" onClick={async () => refresh(await window.petAPI.agentPlugins({ type: 'scheduleDelete', name: t.id }))}>删除</button>
-          </li>
-        ))}
-      </ul>
 
       <h3>插件</h3>
       <small className="hint">把插件文件夹放进插件目录（含 plugin.json），在这里批准后才会运行。插件改动后需要重新批准。插件代码拥有和桌宠一样的权限，只安装你信任的插件。</small>

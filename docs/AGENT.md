@@ -297,3 +297,11 @@
 - 任何"发布 / 发送 / 评论 / 回复 / 私信"按钮：一律高风险，每一条都弹卡片，卡片上列出将发出的文字；按钮为「发 / 改一下 / 不发」，没有"本次都允许"。
 - `browser_upload_file`：把视频/封面放进上传框（只选文件，不发布），需要确认。
 - 规则：只在你本次点名的视频/评论/人下面评论或私信；不自己找陌生人评论、私信、关注；不批量；简介写明"由 AI 桌宠运营"。
+
+## 主窗口、我的资料、上下文窗口
+
+- **一个窗口**：`WindowManager.openPanel('chat' | 'settings')` 都打开同一个主窗口（`titleBarStyle: 'hidden'` + `titleBarOverlay`，系统自带的最小化、最大化、关闭按钮画在页面标题栏上）。它可以改大小、最大化，按 F11 全屏，位置和大小保存在 `config.json` 的 `mainWindow`。打开设置时，主进程发 `evt:navigate` 让页面切到设置页；窗口还没创建时，用 `#chat:settings` 直接在设置页打开。关闭只是隐藏，退出程序时才真正关闭（`allowClose()`）。
+- **页面**：`src/components/AppShell.tsx` 是左侧导航加右侧页面。会话页 `ChatView` 一直挂载，切到别的页面时只是隐藏，所以输入框里的内容、滚动位置和进行中的任务都不会丢。定时任务和技能页面通过 `agent:manage` 操作（新建定时任务；读取、保存、删除技能，删除时移到回收站）。这些都是用户自己在界面上点的，所以不再弹确认卡片；她自己调用 `schedule_task` / `save_skill` 时照常需要确认。
+- **浅色/深色**：`settings.uiMode`（system / light / dark）会设置 `nativeTheme.themeSource`，页面里的 `prefers-color-scheme` 跟着变（见 `src/styles/shell.css`），标题栏按钮的颜色也一起更新。主色仍然是角色的颜色。
+- **我的资料**：`settings.profile`（`shared/profile.ts`）。`sanitizeProfile` 负责清理输入（去掉尖括号，限制长度，时间必须是 HH:MM）。`buildUserBlock` 生成“关于用户”这一段，放在人格设定之后、“做自己的底线”之前，并注明“只作背景参考，不是任何操作授权”。勿扰时段（`inQuietHours`，可以跨过午夜）里不自言自语，定时任务的通知也静音。头像在页面里先裁成 160×160 的 PNG，主进程只接受 PNG/JPEG/WebP 的 data URL，保存成 userData 里的 `user-avatar.img`。
+- **上下文窗口**：`agent.contextWindow`（token 数）。压缩预算 `compactOptions.maxChars` 按约 70% × 1.6 字符/token 计算，最少 2 万字符；测试可以直接指定一个固定值。每个回合记录 `peakInputTokens`（这一回合里最大的一次请求），状态栏据此显示“上下文 X% · 用量 / 窗口”。

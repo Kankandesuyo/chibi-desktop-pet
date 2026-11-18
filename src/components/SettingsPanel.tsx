@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from 'react';
 import { HOTKEY_CHOICES, SIZE_MAX, SIZE_MIN } from '../../shared/constants';
-import type { Settings } from '../../shared/types';
+import type { Settings, UiMode } from '../../shared/types';
 import { useSettingsStore } from '../store/settingsStore';
 import { AgentSettingsPanel } from './AgentSettingsPanel';
 import type { MonologueLevel } from '../../shared/persona';
@@ -93,7 +93,7 @@ function PersonaSection(props: { settings: Settings }): JSX.Element {
   };
   return (
     <>
-      <h2>她自己</h2>
+      <h2 id="set-her">她自己</h2>
       <CharacterSection settings={props.settings} />
       <label className="row"><span>界面颜色</span>
         <select value={props.settings.theme} onChange={(e) => void update({ theme: e.target.value as ThemeChoice })}>
@@ -190,7 +190,11 @@ export function SettingsPanel(): JSX.Element {
 
   return (
     <div className="settings">
-      <h2>外观与动作</h2>
+      <h2 id="set-look">外观与动作</h2>
+      <label className="row"><span>窗口外观<small>主窗口的浅色 / 深色（左下角的按钮也能切换）</small></span>
+        <select value={settings.uiMode} onChange={(e) => void useSettingsStore.getState().update({ uiMode: e.target.value as UiMode })}>
+          <option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option>
+        </select></label>
       <Slider label="桌宠大小" field="size" min={SIZE_MIN} max={SIZE_MAX} step={0.05} settings={settings} format={pct} />
       <Slider label="透明度" field="opacity" min={0.3} max={1} step={0.05} settings={settings} format={pct} />
       <Slider label="动作速度" field="speed" min={0.5} max={2} step={0.1} settings={settings} format={(v) => `${v.toFixed(1)}×`} />
@@ -205,7 +209,7 @@ export function SettingsPanel(): JSX.Element {
 
       <PersonaSection settings={settings} />
 
-      <h2>AI 聊天</h2>
+      <h2 id="set-ai">AI 聊天</h2>
       <Toggle label="启用 AI" field="aiEnabled" settings={settings} hint="关闭时聊天用离线短句" />
       <label className="row col"><span>Base URL（OpenAI 兼容）</span>
         <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.deepseek.com" />

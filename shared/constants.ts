@@ -31,6 +31,7 @@ export const IPC = {
   saveStats: 'pet:save-stats',
   petEvent: 'pet:event',
   updateSettings: 'settings:update',
+  panelState: 'evt:panel-state', agentManage: 'agent:manage', userAvatar: 'user:avatar', userAvatarSet: 'user:avatar-set', navigate: 'evt:navigate',
   updateAiConfig: 'settings:update-ai',
   saveChatHistory: 'chat:save-history',
   aiChat: 'ai:chat',

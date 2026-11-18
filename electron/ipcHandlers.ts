@@ -1,4 +1,6 @@
 import { app, ipcMain, Menu, shell, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { isEmotion, isPetAction } from '../shared/aiProtocol';
 import { canEat } from '../shared/characters';
 import { IPC } from '../shared/constants';
@@ -75,7 +77,6 @@ export function registerIpcHandlers(config: ConfigStore, windows: WindowManager,
   on(IPC.openChat, () => windows.openPanel('chat'));
   on(IPC.openSettings, () => windows.openPanel('settings'));
   on(IPC.closePanel, (e) => windows.closePanelOf(e.sender.id));
-  on(IPC.panelResize, (e, w, h) => { if (typeof w === 'number' && typeof h === 'number') windows.chatResize(e.sender.id, w, h); });
   ipcMain.handle(IPC.panelControl, (e, action) => (windows.allWebContentsIds().includes(e.sender.id) ? windows.chatControl(e.sender.id, String(action)) : null));
   on(IPC.openClaude, () => { void openClaudeDesktop(); });
   on(IPC.saveStats, (_e, stats) => config.setStats(sanitizeStats(stats, config.getStats())));
@@ -86,6 +87,26 @@ export function registerIpcHandlers(config: ConfigStore, windows: WindowManager,
     config.updateSettings(patch);
     applySettings();
     return config.getSettings();
+  });
+  // The user's avatar (我的资料): one small picture in the user-data folder.
+  const avatarFile = (): string => path.join(app.getPath('userData'), 'user-avatar.img');
+  ipcMain.handle(IPC.userAvatar, (e) => {
+    if (!trusted(e) || !config.getSettings().profile.hasAvatar) return '';
+    try { return fs.readFileSync(avatarFile(), 'utf8'); } catch { return ''; }
+  });
+  ipcMain.handle(IPC.userAvatarSet, (e, dataUrl) => {
+    if (!trusted(e)) return { ok: false, error: '不可用', settings: config.getSettings() };
+    if (dataUrl === null) {
+      try { fs.rmSync(avatarFile(), { force: true }); } catch { /* ignore */ }
+      config.setAvatarSaved(false); applySettings();
+      return { ok: true, settings: config.getSettings() };
+    }
+    if (typeof dataUrl !== 'string' || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) return { ok: false, error: '只支持 PNG、JPG 或 WebP 图片', settings: config.getSettings() };
+    if (dataUrl.length > 700_000) return { ok: false, error: '图片太大了（压缩后仍超过 500 KB）', settings: config.getSettings() };
+    fs.mkdirSync(path.dirname(avatarFile()), { recursive: true });
+    fs.writeFileSync(avatarFile(), dataUrl, 'utf8');
+    config.setAvatarSaved(true); applySettings();
+    return { ok: true, settings: config.getSettings() };
   });
   ipcMain.handle(IPC.updateAiConfig, (e, patch) => {
     if (!trusted(e)) return config.getSettings();
