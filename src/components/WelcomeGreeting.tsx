@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useT } from '../i18n';
 
 export function WelcomeGreeting({ callMe, displayName }: { callMe: string; displayName: string }) {
-  const t = (text: string) => text;
+  const t = useT();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     let timer: number;
