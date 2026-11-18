@@ -361,3 +361,6 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
   .settings input[type="checkbox"] { appearance: auto; width: 18px; height: 18px; }
   .settings input[type="checkbox"]::before { content: none; }
 }
+
+/* settings → about */
+.about-value { margin-left: auto; font: 12.5px/1.4 "Cascadia Mono", Consolas, monospace; opacity: 0.85; user-select: text; }

@@ -166,7 +166,26 @@ function Toggle(props: { label: string; field: BoolKey; settings: Settings; hint
   );
 }
 
-export type SettingsSection = 'set-look' | 'set-her' | 'set-ai' | 'set-agent';
+export type SettingsSection = 'set-look' | 'set-her' | 'set-ai' | 'set-agent' | 'set-about';
+
+/** 关于: which build is running (to tell whether an update really arrived). */
+function AboutSection(): JSX.Element {
+  const t = useT();
+  const b = __BUILD__;
+  const [update, setUpdate] = useState<{ ready: boolean } | null>(null);
+  useEffect(() => { void window.petAPI.updateStatus().then(setUpdate); return window.petAPI.onUpdate(setUpdate); }, []);
+  const ua = /Chrome\/([\d.]+)/.exec(navigator.userAgent)?.[1] ?? '';
+  return (
+    <>
+      <h2 id="set-about">{t('关于')}</h2>
+      <div className="row"><span>{t('版本')}</span><code className="about-value">{b.version}</code></div>
+      <div className="row"><span>{t('构建')}<small>{t('Git 提交编号；带 + 表示构建时还有没提交的改动')}</small></span><code className="about-value">{b.commit}{b.dirty ? '+' : ''}</code></div>
+      <div className="row"><span>{t('构建时间')}</span><code className="about-value">{b.time}</code></div>
+      {ua && <div className="row"><span>Chromium</span><code className="about-value">{ua}</code></div>}
+      <div className="row"><span>{t('更新')}</span><span className="about-value">{update?.ready ? t('有新版本，左下角可以安装') : t('已是最新')}</span></div>
+    </>
+  );
+}
 
 function Category({ id, active, children }: { id: SettingsSection; active: SettingsSection; children: React.ReactNode }): JSX.Element {
   return (
@@ -252,6 +271,7 @@ export function SettingsPanel({ active }: { active: SettingsSection }): JSX.Elem
 
       </Category>
       <Category id="set-agent" active={active}><AgentSettingsPanel settings={settings} /></Category>
+      <Category id="set-about" active={active}><AboutSection /></Category>
     </>
   );
 }
