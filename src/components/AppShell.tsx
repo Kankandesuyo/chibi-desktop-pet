@@ -47,6 +47,11 @@ const FolderIcon = (): JSX.Element => (
     <path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z" /><path d="M3.5 10h17" />
   </svg>
 );
+const SidebarIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M9.5 4.5v15" />
+  </svg>
+);
 const Caret = ({ open }: { open: boolean }): JSX.Element => (
   <svg className={`fold-caret${open ? ' open' : ''}`} viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="m4.5 2.5 3.5 3.5-3.5 3.5" />
@@ -72,6 +77,8 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const pickRef = useRef<HTMLDivElement>(null);
   const [folded, setFolded] = useState<string[]>(() => load<string[]>('nav.folded', []));
   const setNavMode = (m: NavMode): void => { setNavModeState(m); save('nav.mode', m); };
+  const [navCollapsed, setNavCollapsedState] = useState<boolean>(() => load<boolean>('nav.collapsed', false));
+  const toggleNav = (): void => setNavCollapsedState((c) => { save('nav.collapsed', !c); return !c; });
   const isFolded = (key: string): boolean => folded.includes(key);
   const toggleFold = (key: string): void => setFolded((f) => { const next = f.includes(key) ? f.filter((k) => k !== key) : [...f, key]; save('nav.folded', next); return next; });
   const [update, setUpdate] = useState<UpdateStatus>({ ready: false });
@@ -261,7 +268,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const browserToggle = (
     <button
       type="button" className={`head-icon${browser.open ? ' on' : ''}`} title={browser.open ? t('关闭浏览器') : t('打开内置浏览器')}
-      onClick={() => void window.petAPI.browserControl(browser.open ? { type: 'close' } : { type: 'open', url: 'https://www.bing.com/' })}
+      onClick={() => void window.petAPI.browserControl(browser.open ? { type: 'close' } : { type: 'open' })}
     >
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5Z" />
@@ -316,6 +323,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
             <button type="button" role="tab" aria-selected={navMode === 'chat'} className={navMode === 'chat' ? 'on' : ''} onClick={() => setNavMode('chat')} title={t('聊天：普通会话')}><ChatIcon /></button>
             <button type="button" role="tab" aria-selected={navMode === 'code'} className={navMode === 'code' ? 'on' : ''} onClick={() => setNavMode('code')} title={t('代码：项目和项目里的对话')}><CodeIcon /></button>
           </span>
+          <button type="button" className="nav-collapse" onClick={toggleNav} title={t('收起侧边栏（Ctrl+B）')} aria-label={t('收起侧边栏（Ctrl+B）')}><SidebarIcon /></button>
         </div>
         {navMode === 'chat' && (
           <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? t('她正在做事，做完再开新会话') : t('开始新会话（Ctrl+N，/new）')}>{t('＋ 新会话')}</button>

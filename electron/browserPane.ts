@@ -31,7 +31,7 @@ export class BrowserPane {
   private tell(): void { this.windows.mainWindow()?.webContents.send('evt:browser', this.state()); }
 
   /** Opens the pane (and the main window) and returns the page's web contents once it has a place on screen. */
-  async contents(): Promise<WebContents> {
+  async contents(waitForPlace = true): Promise<WebContents> {
     this.windows.openPanel('chat', 'chat');
     const win = this.windows.mainWindow();
     if (!win) throw new Error('主窗口没有打开');
@@ -39,7 +39,7 @@ export class BrowserPane {
     this.attach(win);
     this.tell();
     // Wait (briefly) for the page to lay the pane out; until then it sits on the right half.
-    if (!this.bounds) await new Promise<void>((resolve) => { this.waiters.push(resolve); setTimeout(resolve, 1500); });
+    if (waitForPlace && !this.bounds) await new Promise<void>((resolve) => { this.waiters.push(resolve); setTimeout(resolve, 1500); });
     this.place();
     return (this.view as WebContentsView).webContents;
   }
@@ -72,7 +72,7 @@ export class BrowserPane {
     if (!v || !win || win.isDestroyed()) return;
     if (this.bounds && this.bounds.width > 20 && this.bounds.height > 20) {
       v.setBounds(this.bounds); v.setVisible(true);
-    } else if (this.bounds === null && this.waiters.length) {
+    } else if (this.bounds === null && this.waiters.length && this.view?.webContents.getURL()) {
       const [w, h] = win.getContentSize();
       v.setBounds({ x: Math.round((w as number) / 2), y: 40, width: Math.round((w as number) / 2), height: (h as number) - 40 }); v.setVisible(true);
     } else v.setVisible(false);
@@ -97,11 +97,13 @@ export class BrowserPane {
   }
 
   async control(a: BrowserPaneAction): Promise<BrowserPaneState> {
-    if (a.type === 'open') { const wc = await this.contents(); if (a.url && httpUrl(a.url)) void wc.loadURL(a.url); return this.state(); }
+    // Without a URL the pane opens on its start page (drawn by the window; the native view stays hidden).
+    if (a.type === 'open') { const wc = await this.contents(!!a.url); if (a.url && httpUrl(a.url)) void wc.loadURL(a.url); return this.state(); }
     const wc = this.view?.webContents;
     if (a.type === 'close') { this.close(); return this.state(); }
     if (!wc || wc.isDestroyed()) return this.state();
-    if (a.type === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
+    if (a.type === 'blank') void wc.loadURL('about:blank');
+    else if (a.type === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
     else if (a.type === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
     else if (a.type === 'reload') { if (wc.isLoading()) wc.stop(); else wc.reload(); }
     else if (a.type === 'navigate' && a.url) {

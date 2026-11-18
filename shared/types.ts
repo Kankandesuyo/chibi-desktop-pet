@@ -108,7 +108,7 @@ export interface UpdateStatus { ready: boolean; stagedAt?: number; error?: strin
 export interface BrowserPaneState { open: boolean; url: string; title: string; loading: boolean; canGoBack: boolean; canGoForward: boolean }
 export type BrowserPaneAction =
   | { type: 'open'; url?: string } | { type: 'navigate'; url: string }
-  | { type: 'back' } | { type: 'forward' } | { type: 'reload' } | { type: 'external' } | { type: 'close' };
+  | { type: 'blank' } | { type: 'back' } | { type: 'forward' } | { type: 'reload' } | { type: 'external' } | { type: 'close' };
 export interface PanelState { pinned: boolean; fullscreen: boolean; maximized: boolean }
 
 export type PetNotice = AiReplyMeta | { talking: boolean } | AgentPetSignal;
