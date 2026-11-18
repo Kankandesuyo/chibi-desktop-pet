@@ -40,6 +40,9 @@
 body[data-view="chat"] { background: var(--cream); color: var(--ink); }
 .app { display: grid; grid-template-columns: 232px 1fr; height: 100%; font-size: 13.5px; }
 
+/* Native dropdown lists (settings) follow the theme instead of white-on-white. */
+body[data-view="chat"] select option { background: var(--surface); color: var(--ink); }
+
 /* ---- left navigation ---- */
 .nav { display: flex; flex-direction: column; min-height: 0; background: var(--nav); border-right: 1px solid var(--line); }
 .nav-brand { display: flex; align-items: center; gap: 9px; height: 52px; padding: 10px 14px 0; -webkit-app-region: drag; }

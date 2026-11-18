@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type JSX, type KeyboardEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type JSX, type KeyboardEvent, type RefObject } from 'react';
 import { SLASH_COMMANDS } from '../../../shared/harness';
 import { baseName } from './format';
 
@@ -29,6 +29,16 @@ interface Props {
 /** The input area: attachments, slash-command completion, permission mode, send / stop. */
 export function Composer(p: Props): JSX.Element {
   const [sel, setSel] = useState(0);
+  const [modeOpen, setModeOpen] = useState(false);
+  const modeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!modeOpen) return;
+    const off = (e: MouseEvent): void => { if (!modeRef.current?.contains(e.target as Node)) setModeOpen(false); };
+    const esc = (e: globalThis.KeyboardEvent): void => { if (e.key === 'Escape') { e.stopPropagation(); setModeOpen(false); } };
+    window.addEventListener('mousedown', off);
+    window.addEventListener('keydown', esc, true);
+    return () => { window.removeEventListener('mousedown', off); window.removeEventListener('keydown', esc, true); };
+  }, [modeOpen]);
   const slash = /^\/(\S*)$/.exec(p.text);
   const matches = slash ? SLASH_COMMANDS.filter((c) => c.name.startsWith(slash[1] as string) || c.aliases.some((a) => a.startsWith(slash[1] as string))) : [];
   const showMenu = matches.length > 0 && !(matches.length === 1 && `/${matches[0]?.name}` === p.text);
@@ -68,12 +78,31 @@ export function Composer(p: Props): JSX.Element {
       </div>
       <div className="hx-composer-bar">
         {p.permission && (
-          <label className={`hx-mode hx-mode-${p.permission}`} title={PERMISSION_HINT[p.permission]}>
-            <span className="hx-mode-dot" />
-            <select value={p.permission} onChange={(e) => p.onPermission(e.target.value as PermissionMode)}>
-              {(Object.keys(PERMISSION_LABEL) as PermissionMode[]).map((m) => <option key={m} value={m}>{PERMISSION_LABEL[m]}</option>)}
-            </select>
-          </label>
+          <div className="hx-mode-wrap" ref={modeRef}>
+            {modeOpen && (
+              <div className="hx-mode-menu" role="listbox">
+                {(Object.keys(PERMISSION_LABEL) as PermissionMode[]).map((m) => (
+                  <button
+                    key={m} type="button" role="option" aria-selected={m === p.permission}
+                    className={`hx-mode-${m}${m === p.permission ? ' on' : ''}`}
+                    onClick={() => { p.onPermission(m); setModeOpen(false); p.inputRef.current?.focus(); }}
+                  >
+                    <span className="hx-mode-dot" />
+                    <span className="hx-mode-text"><b>{PERMISSION_LABEL[m]}</b><small>{PERMISSION_HINT[m]}</small></span>
+                    {m === p.permission && <span className="hx-mode-check">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              type="button" className={`hx-mode hx-mode-${p.permission}${modeOpen ? ' open' : ''}`} title={PERMISSION_HINT[p.permission]}
+              onClick={() => setModeOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={modeOpen}
+            >
+              <span className="hx-mode-dot" />
+              <span>{PERMISSION_LABEL[p.permission]}</span>
+              <span className="hx-mode-caret">{modeOpen ? '▾' : '▴'}</span>
+            </button>
+          </div>
         )}
         <span className="hx-composer-tip">/ 命令 · 拖文件到她身上</span>
         {p.working
