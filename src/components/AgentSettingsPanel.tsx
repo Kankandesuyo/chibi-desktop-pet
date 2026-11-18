@@ -75,7 +75,7 @@ export function AgentSettingsPanel({ settings }: { settings: Settings }): JSX.El
       <label className="row pick"><span>上下文窗口<small>所用模型一次能看的长度。长任务快到上限时，会先压缩旧的工具结果，聊天底部会显示用了多少。</small></span>
         <select value={CONTEXT_WINDOWS.includes(a.contextWindow as (typeof CONTEXT_WINDOWS)[number]) ? a.contextWindow : ''} onChange={(e) => void updateAgent({ contextWindow: Number(e.target.value) })}>
           {!CONTEXT_WINDOWS.includes(a.contextWindow as (typeof CONTEXT_WINDOWS)[number]) && <option value="">{Math.round(a.contextWindow / 1000)}K</option>}
-          {CONTEXT_WINDOWS.map((w) => <option key={w} value={w}>{w >= 1_000_000 ? `${w / 1_000_000}M` : `${w / 1000}K`}{w === 64000 ? '（DeepSeek 等）' : w === 128000 ? '（GPT-4o 等）' : w === 1_000_000 ? '（长上下文模型）' : ''}</option>)}
+          {CONTEXT_WINDOWS.map((w) => <option key={w} value={w}>{w >= 1_000_000 ? `${w / 1_000_000}M` : `${w / 1000}K`}{w === 64000 ? '（旧版 DeepSeek V3 等）' : w === 128000 ? '（GPT-4o 等）' : w === 1_000_000 ? '（DeepSeek V4 / deepseek-flash 等）' : ''}</option>)}
         </select></label>
       <label className="row"><span>工具调用方式</span>
         <select value={a.toolProtocol} onChange={(e) => void updateAgent({ toolProtocol: e.target.value as 'auto' | 'native' | 'json' })}>
