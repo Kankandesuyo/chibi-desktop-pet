@@ -5,6 +5,14 @@ import type { WindowManager } from './windowManager';
 
 const CLOSED: BrowserPaneState = { open: false, url: '', title: '', loading: false, canGoBack: false, canGoForward: false };
 const httpUrl = (u: string): boolean => /^https?:\/\//i.test(u);
+const CHROME = process.versions.chrome ?? '130.0.0.0';
+/** Clean browser identities (no "Electron" in them): desktop for a wide pane, phone for a narrow one. */
+const DESKTOP_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME} Safari/537.36`;
+const MOBILE_UA = `Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME} Mobile Safari/537.36`;
+/** Below this pane width (DIP) pages are loaded in their mobile layout, which fits any width. */
+const NARROW = 800;
+/** Desktop pages are zoomed out at most this far to fit; beyond that the mobile layout is used instead. */
+const MIN_DESKTOP_ZOOM = 0.67;
 
 /**
  * The built-in browser, shown as a pane inside the main window (like Codex / Claude): a WebContentsView laid
@@ -16,6 +24,8 @@ export class BrowserPane {
   private host: BrowserWindow | null = null;
   private bounds: Rectangle | null = null;
   private waiters: (() => void)[] = [];
+  private fitTimer: NodeJS.Timeout | null = null;
+  private fitWidth = 0;
 
   constructor(private readonly windows: WindowManager) {}
 
@@ -41,7 +51,18 @@ export class BrowserPane {
     // Wait (briefly) for the page to lay the pane out; until then it sits on the right half.
     if (waitForPlace && !this.bounds) await new Promise<void>((resolve) => { this.waiters.push(resolve); setTimeout(resolve, 1500); });
     this.place();
-    return (this.view as WebContentsView).webContents;
+    const wc = (this.view as WebContentsView).webContents;
+    this.pickLayout(wc);
+    return wc;
+  }
+
+  private mobile = false;
+  /** Desktop or mobile layout for the next page, by how wide the pane is now. */
+  private pickLayout(wc: WebContents, force?: boolean): void {
+    const narrow = force ?? (this.bounds ? this.bounds.width < NARROW : false);
+    if (narrow === this.mobile && wc.getUserAgent() === (narrow ? MOBILE_UA : DESKTOP_UA)) return;
+    this.mobile = narrow;
+    wc.setUserAgent(narrow ? MOBILE_UA : DESKTOP_UA);
   }
 
   private create(): void {
@@ -52,6 +73,9 @@ export class BrowserPane {
     wc.setWindowOpenHandler(({ url }) => { if (httpUrl(url)) void wc.loadURL(url); return { action: 'deny' }; });
     wc.on('will-navigate', (event, url) => { if (!httpUrl(url)) event.preventDefault(); });
     for (const ev of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(ev as 'did-start-loading', () => this.tell());
+    // Fit the page to the pane: as soon as it can be laid out, and again when it has finished loading.
+    wc.on('dom-ready', () => this.scheduleFit(0));
+    wc.on('did-finish-load', () => this.scheduleFit(300));
     this.view = view;
   }
 
@@ -83,6 +107,43 @@ export class BrowserPane {
     this.bounds = b ? { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) } : null;
     if (b) for (const w of this.waiters.splice(0)) w();
     this.place();
+    // The pane got wider or narrower: fit again (debounced while the divider is dragged).
+    if (this.bounds && Math.abs(this.bounds.width - this.fitWidth) > 8) this.scheduleFit(200);
+  }
+
+  private scheduleFit(ms: number): void {
+    if (this.fitTimer) clearTimeout(this.fitTimer);
+    this.fitTimer = setTimeout(() => { this.fitTimer = null; void this.fit(); }, ms);
+  }
+
+  /**
+   * Adapts the page to the pane's width: pages that fit stay at 100%; pages with a fixed minimum width (many
+   * desktop sites) are zoomed out just enough to fit, down to 50%, instead of being cut off with a sideways
+   * scrollbar. Measured at 100% first, so a wider pane zooms back in.
+   */
+  private async fit(): Promise<void> {
+    const wc = this.view?.webContents;
+    if (!wc || wc.isDestroyed() || !this.bounds || !/^https?:/i.test(wc.getURL())) return;
+    this.fitWidth = this.bounds.width;
+    const measure = async (): Promise<{ sw: number; iw: number } | null> => {
+      try {
+        return await wc.executeJavaScriptInIsolatedWorld(998, [{ code: '({ sw: Math.max(document.documentElement.scrollWidth, document.body ? document.body.scrollWidth : 0), iw: window.innerWidth })' }]) as { sw: number; iw: number };
+      } catch { return null; }
+    };
+    const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 120));
+    if (wc.getZoomFactor() !== 1) { wc.setZoomFactor(1); await settle(); }
+    const first = await measure();
+    if (!first || first.iw <= 0 || first.sw <= first.iw + 2) return;
+    // A desktop page that would need too much shrinking: load its mobile layout instead (once).
+    if (!this.mobile && first.iw / first.sw < MIN_DESKTOP_ZOOM) { this.pickLayout(wc, true); wc.reload(); return; }
+    for (let i = 0; i < 3; i++) {
+      const m = i === 0 ? first : await measure();
+      if (!m || m.iw <= 0 || m.sw <= m.iw + 2) return;
+      const z = Math.max(this.mobile ? 0.5 : MIN_DESKTOP_ZOOM, Math.min(1, wc.getZoomFactor() * (m.iw / m.sw)));
+      if (Math.abs(z - wc.getZoomFactor()) < 0.01) return;
+      wc.setZoomFactor(Math.floor(z * 100) / 100);
+      await settle();
+    }
   }
 
   close(): void {
@@ -107,6 +168,7 @@ export class BrowserPane {
     else if (a.type === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
     else if (a.type === 'reload') { if (wc.isLoading()) wc.stop(); else wc.reload(); }
     else if (a.type === 'navigate' && a.url) {
+      this.pickLayout(wc);
       const raw = a.url.trim();
       const url = httpUrl(raw) ? raw : /^[\w-]+(\.[\w-]+)+([/?#].*)?$/.test(raw) ? `https://${raw}` : `https://www.bing.com/search?q=${encodeURIComponent(raw)}`;
       void wc.loadURL(url);
