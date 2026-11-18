@@ -31,14 +31,14 @@ afterAll(() => { server.closeAllConnections(); server.close(); });
 describe.skipIf(!fs.existsSync(CHROME))('browser automation (real headless Chrome via Playwright)', () => {
   it('opens, fills, clicks, extracts, downloads; refuses passwords; flags captchas; page text is untrusted', async () => {
     const h = makeHarness([
-      call('browser_open', { url: `${base}/` }),
+      call('browser_open', { mode: 'automation', url: `${base}/` }),
       (m) => { expect((lastToolResult(m).data as { title: string }).title).toBe('测试首页'); return call('browser_fill', { label: '关键词', value: 'AI 新闻' }); },
       (m) => { expect(lastToolResult(m).verified).toBe(true); return call('browser_fill', { selector: '#pw', value: 'secret' }); },
       (m) => { expect(String(lastToolResult(m).error)).toContain('密码'); return call('browser_click', { role: 'button', name: '搜索' }); },
-      (m) => { expect((lastToolResult(m).data as { title: string }).title).toBe('结果页'); return call('browser_extract', {}); },
+      (m) => { expect((lastToolResult(m).data as { title: string }).title).toBe('结果页'); return call('browser_extract', { mode: 'automation' }); },
       (m) => { expect(String(m[m.length - 1]?.content)).toContain('<untrusted_data'); expect(JSON.stringify(lastToolResult(m).data)).toContain('AI 新闻 2'); return call('browser_tabs', { action: 'new', url: `${base}/` }); },
       (m) => { expect((lastToolResult(m).data as unknown[]).length).toBe(2); return call('browser_download', { text: '下载报告' }); },
-      (m) => { expect(lastToolResult(m).verified).toBe(true); return call('browser_open', { url: `${base}/captcha` }); },
+      (m) => { expect(lastToolResult(m).verified).toBe(true); return call('browser_open', { mode: 'automation', url: `${base}/captcha` }); },
       (m) => { expect(JSON.stringify(lastToolResult(m).data)).toContain('不能绕过'); return call('browser_close', {}); },
       say('搜到了'),
     ]);
@@ -52,11 +52,11 @@ describe.skipIf(!fs.existsSync(CHROME))('browser automation (real headless Chrom
 
   it('posting under the user account always asks, shows what goes out, and does nothing when refused', async () => {
     const h = makeHarness([
-      call('browser_open', { url: `${base}/post` }),
+      call('browser_open', { mode: 'automation', url: `${base}/post` }),
       () => call('browser_fill', { selector: '#c', value: '今天的屏幕太阳好暖' }),
       () => call('browser_upload_file', { selector: '#f', path: '~/Desktop/clip.mp4' }),
       () => call('browser_click', { role: 'button', name: '发布' }),
-      (m) => { expect(lastToolResult(m).status).toBe('denied'); return call('browser_extract', {}); },
+      (m) => { expect(lastToolResult(m).status).toBe('denied'); return call('browser_extract', { mode: 'automation' }); },
       () => call('browser_click', { role: 'button', name: '发布' }),
       (m) => { expect((lastToolResult(m).data as { title: string }).title).toBe('已发布:今天的屏幕太阳好暖:clip.mp4'); return call('browser_close', {}); },
       say('发好了'),

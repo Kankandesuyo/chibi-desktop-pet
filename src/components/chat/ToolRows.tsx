@@ -29,9 +29,15 @@ function ToolRow({ step }: { step: AgentStepView }): JSX.Element {
 }
 
 export function ToolRows({ steps }: { steps: AgentStepView[] }): JSX.Element | null {
+  const t = useT();
   const shown = steps.filter((s) => s.tool !== 'update_plan');
   if (!shown.length) return null;
-  return <ul className="hx-tools">{shown.map((s) => <ToolRow key={s.stepId} step={s} />)}</ul>;
+  return (
+    <details className="hx-tool-group">
+      <summary>{t('工具调用（{count}）', { count: shown.length })}</summary>
+      <ul className="hx-tools">{shown.map((s) => <ToolRow key={s.stepId} step={s} />)}</ul>
+    </details>
+  );
 }
 
 const PLAN_MARK: Record<PlanStepView['status'], string> = { pending: '○', in_progress: '◐', done: '●', failed: '✕', skipped: '–' };

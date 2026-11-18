@@ -1,4 +1,4 @@
-import { petWebSearch, petWebRead } from './petWeb';
+import { petWebSearch, petWebRead, openPetPage, extractPetPage, closePetBrowser } from './petWeb';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { BrowserContext, Page } from 'playwright-core';
@@ -24,9 +24,10 @@ export class BrowserSession {
 
   constructor(private readonly options: () => BrowserOptions) {}
 
-  private async ctx(): Promise<BrowserContext> {
+  private async ctx(allowLaunch = false): Promise<BrowserContext> {
     if (this.context) return this.context;
     if (this.launching) return this.launching;
+    if (!allowLaunch) throw new Error('当前没有外部自动化窗口。普通浏览请用 browser_open 和 browser_extract；执行网页操作需先以 automation 模式打开。');
     this.launching = (async () => {
       const { chromium } = await import('playwright-core');
       const o = this.options();
@@ -46,16 +47,16 @@ export class BrowserSession {
     try { return await this.launching; } finally { this.launching = null; }
   }
 
-  async page(): Promise<Page> {
-    const c = await this.ctx();
+  async page(allowLaunch = false): Promise<Page> {
+    const c = await this.ctx(allowLaunch);
     const pages = c.pages();
     if (pages.length === 0) { this.current = 0; return c.newPage(); }
     if (this.current >= pages.length) this.current = pages.length - 1;
     return pages[this.current] as Page;
   }
 
-  async newPage(): Promise<Page> {
-    const c = await this.ctx();
+  async newPage(allowLaunch = false): Promise<Page> {
+    const c = await this.ctx(allowLaunch);
     const p = await c.newPage();
     this.current = c.pages().indexOf(p);
     return p;
@@ -133,20 +134,24 @@ const locatorProps = {
   name: { type: 'string', maxLength: 200, description: '与 role 搭配：可访问名称' },
 } as const;
 
-const browserOpen = defineTool<{ url: string; newTab?: boolean }>({
+const browserOpen = defineTool<{ url: string; newTab?: boolean; mode?: string }>({
   name: 'browser_open', group: 'browser', riskLevel: 'low', requiresConfirmation: false,
-  description: '在桌宠控制的浏览器（独立配置，不使用你自己浏览器的登录）里打开网页，之后可以点击、填写、提取内容。只是想让用户自己看网页时用 open_url。',
-  inputSchema: { type: 'object', properties: { url: { type: 'string', maxLength: 2000 }, newTab: { type: 'boolean' } }, required: ['url'] },
+  description: '在桌宠内置窗口打开网址。需要操作网页表单时，先用 mode=automation 打开独立的外部自动化浏览器。',
+  inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['embedded', 'automation'], description: '默认 embedded。仅在用户要求网页点击、填表等自动化操作时使用 automation（外部浏览器）。' }, url: { type: 'string', maxLength: 2000 }, newTab: { type: 'boolean' } }, required: ['url'] },
   title: (a) => `浏览器打开 ${a.url}`,
   execute: async (a, ctx) => {
     const url = normalizeUrl(a.url);
     if (!url) return { ok: false, summary: '网址不合法', error: '只允许 http/https' };
-    const p = a.newTab ? await ctx.services.browser.newPage() : await ctx.services.browser.page();
+    if (a.mode !== 'automation') {
+      const data = await openPetPage(url, ctx.signal, a.newTab);
+      return { ok: true, summary: '已在桌宠浏览器打开：' + data.title, data, external: true };
+    }
+    const p = a.newTab ? await ctx.services.browser.newPage(true) : await ctx.services.browser.page(true);
     await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const info = await pageInfo(p);
     return { ok: true, summary: `已打开：${info.title || info.url}`, data: { ...info, notice: info.captcha ? captchaNote : undefined }, external: true };
   },
-  verify: async (_a, _r, ctx) => { const p = await ctx.services.browser.page(); const ok = /^https?:/.test(p.url()); return { verified: ok, detail: ok ? `当前页面 ${p.url()}` : '页面没有打开' }; },
+  verify: async (a, r, ctx) => { if (a.mode !== 'automation') return { verified: r.ok, detail: r.summary }; const p = await ctx.services.browser.page(); const ok = /^https?:/.test(p.url()); return { verified: ok, detail: ok ? `当前页面 ${p.url()}` : '页面没有打开' }; },
 });
 
 const ENGINES = {
@@ -155,14 +160,15 @@ const ENGINES = {
   google: { url: (q: string) => `https://www.google.com/search?q=${encodeURIComponent(q)}`, sel: '#search a:has(h3)' },
 } as const;
 
-const browserSearch = defineTool<{ query: string; engine?: keyof typeof ENGINES }>({
+const browserSearch = defineTool<{ query: string; engine?: keyof typeof ENGINES; mode?: string }>({
   name: 'browser_search', group: 'browser', riskLevel: 'low', requiresConfirmation: false,
   description: '用搜索引擎搜索并返回前 10 条结果（标题和链接）。',
-  inputSchema: { type: 'object', properties: { query: { type: 'string', minLength: 1, maxLength: 300 }, engine: { type: 'string', enum: ['bing', 'baidu', 'google'], description: '默认 bing' } }, required: ['query'] },
+  inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['embedded', 'automation'], description: '默认 embedded。仅在用户要求网页点击、填表等自动化操作时使用 automation（外部浏览器）。' }, query: { type: 'string', minLength: 1, maxLength: 300 }, engine: { type: 'string', enum: ['bing', 'baidu', 'google'], description: '默认 bing' } }, required: ['query'] },
   title: (a) => `搜索“${a.query}”`,
   execute: async (a, ctx) => {
+    if (a.mode !== 'automation') return petWebSearch.execute(a, ctx);
     const e = ENGINES[a.engine ?? 'bing'];
-    const p = await ctx.services.browser.page();
+    const p = await ctx.services.browser.page(true);
     await p.goto(e.url(a.query), { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await p.waitForSelector(e.sel, { timeout: 8000 }).catch(() => undefined);
     const results = await p.$$eval(e.sel, (els) => els.slice(0, 10).map((el) => ({ title: (el.textContent ?? '').trim(), url: (el as HTMLAnchorElement).href || el.closest('a')?.href || '' })));
@@ -220,12 +226,16 @@ const browserFill = defineTool<{ selector?: string; label?: string; placeholder?
   },
 });
 
-const browserExtract = defineTool<{ selector?: string; maxChars?: number; includeLinks?: boolean }>({
+const browserExtract = defineTool<{ mode?: string; selector?: string; maxChars?: number; includeLinks?: boolean }>({
   name: 'browser_extract', group: 'browser', riskLevel: 'low', requiresConfirmation: false,
   description: '读取当前网页（或某个元素）的文字内容，可选附带链接列表。',
-  inputSchema: { type: 'object', properties: { selector: { type: 'string', maxLength: 300 }, maxChars: { type: 'integer', minimum: 200, maximum: 30_000 }, includeLinks: { type: 'boolean' } } },
+  inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['embedded', 'automation'], description: '默认 embedded。仅在用户要求网页点击、填表等自动化操作时使用 automation（外部浏览器）。' }, selector: { type: 'string', maxLength: 300 }, maxChars: { type: 'integer', minimum: 200, maximum: 30_000 }, includeLinks: { type: 'boolean' } } },
   title: () => '读取网页内容',
   execute: async (a, ctx) => {
+    if (a.mode !== 'automation') {
+      const data = await extractPetPage(a);
+      return { ok: true, summary: '读取了 ' + data.text.length + ' 字符', data, external: true };
+    }
     const p = await ctx.services.browser.page();
     const text = await p.locator(a.selector ?? 'body').first().innerText({ timeout: 10_000 });
     const max = a.maxChars ?? 8000;
@@ -297,7 +307,7 @@ const browserClose = defineTool<Record<string, never>>({
   description: '关闭桌宠控制的浏览器。',
   inputSchema: { type: 'object', properties: {} },
   title: () => '关闭浏览器',
-  execute: async (_a, ctx) => { await ctx.services.browser.close(); return { ok: true, summary: '浏览器已关闭' }; },
+  execute: async (_a, ctx) => { closePetBrowser(); await ctx.services.browser.close(); return { ok: true, summary: '浏览器已关闭' }; },
 });
 
 export const browserTools: AnyTool[] = [petWebSearch, petWebRead, browserOpen, browserSearch, browserClick, browserFill, browserExtract, browserTabs, browserDownload, browserUpload, browserClose];

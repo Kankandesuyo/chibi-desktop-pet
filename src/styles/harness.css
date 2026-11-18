@@ -50,6 +50,10 @@
 .hx-empty { margin: 40px 20px; text-align: center; opacity: 0.65; line-height: 1.7; }
 
 /* tool rows */
+.hx-tool-group > summary { width: fit-content; max-width: 100%; cursor: pointer; padding: 4px 8px; border-radius: 6px; color: var(--ink); font-size: 12px; }
+.hx-tool-group > summary:hover { background: var(--chip); }
+.hx-tool-group > summary:focus-visible { outline: 2px solid var(--orange); }
+.hx-tool-group[open] > summary { margin-bottom: 4px; }
 .hx-tools { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
 .hx-tool + .hx-tool { border-top: 1px solid var(--line); }
 .hx-tool-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 9px; border: 0; background: none; text-align: left; font-size: 12.5px; }

@@ -104,6 +104,11 @@ export type AiStreamEvent =
 export type PanelAction = 'state' | 'toggle-pin' | 'toggle-fullscreen' | 'hide';
 /** A new build staged as resources/app.asar.new, installed from inside the app. */
 export interface UpdateStatus { ready: boolean; stagedAt?: number; error?: string }
+/** The built-in browser pane in the main window. */
+export interface BrowserPaneState { open: boolean; url: string; title: string; loading: boolean; canGoBack: boolean; canGoForward: boolean }
+export type BrowserPaneAction =
+  | { type: 'open'; url?: string } | { type: 'navigate'; url: string }
+  | { type: 'back' } | { type: 'forward' } | { type: 'reload' } | { type: 'external' } | { type: 'close' };
 export interface PanelState { pinned: boolean; fullscreen: boolean; maximized: boolean }
 
 export type PetNotice = AiReplyMeta | { talking: boolean } | AgentPetSignal;
@@ -172,6 +177,11 @@ export interface PetAPI {
   updateStatus(): Promise<UpdateStatus>;
   updateApply(): Promise<{ ok: boolean; error?: string }>;
   onUpdate(cb: (s: UpdateStatus) => void): () => void;
+  /** Built-in browser pane: where it sits (null = hidden), toolbar actions, state. */
+  browserBounds(b: { x: number; y: number; width: number; height: number } | null): void;
+  browserControl(a: BrowserPaneAction): Promise<BrowserPaneState>;
+  browserState(): Promise<BrowserPaneState>;
+  onBrowser(cb: (s: BrowserPaneState) => void): () => void;
   agentOpenFolder(kind: 'logs' | 'plugins' | 'skills' | 'instructions' | 'hooks' | 'project'): void;
   /** A chat slash command; null when the text is not one (send it as a message instead). */
   agentCommand(text: string): Promise<AgentCommandResult | null>;

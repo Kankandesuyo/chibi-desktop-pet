@@ -10,6 +10,8 @@ import { SchedulesPage } from './pages/SchedulesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SkillsPage } from './pages/SkillsPage';
 import { useT } from '../i18n';
+import { BrowserPane } from './BrowserPane';
+import type { BrowserPaneState } from '../../shared/types';
 
 export type Page = 'chat' | 'schedules' | 'skills' | 'profile' | 'settings';
 const PAGES: readonly Page[] = ['chat', 'schedules', 'skills', 'profile', 'settings'];
@@ -58,6 +60,10 @@ const Caret = ({ open }: { open: boolean }): JSX.Element => (
  */
 export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const t = useT();
+  const [browser, setBrowser] = useState<BrowserPaneState>({ open: false, url: '', title: '', loading: false, canGoBack: false, canGoForward: false });
+  const [browserWidth, setBrowserWidthState] = useState<number>(() => load<number>('browser.width', 520));
+  const setBrowserWidth = (w: number): void => { const v = Math.max(320, Math.min(w, window.innerWidth - 232 - 380)); setBrowserWidthState(v); save('browser.width', v); };
+  useEffect(() => { void window.petAPI.browserState().then(setBrowser); return window.petAPI.onBrowser(setBrowser); }, []);
   const [page, setPage] = useState<Page>(initialPage);
   const [menu, setMenu] = useState(false);
   const [navMode, setNavModeState] = useState<NavMode>(() => load<NavMode>('nav.mode', 'chat'));
@@ -252,6 +258,16 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       </div>
     </div>
   ) : null;
+  const browserToggle = (
+    <button
+      type="button" className={`head-icon${browser.open ? ' on' : ''}`} title={browser.open ? t('关闭浏览器') : t('打开内置浏览器')}
+      onClick={() => void window.petAPI.browserControl(browser.open ? { type: 'close' } : { type: 'open', url: 'https://www.bing.com/' })}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.3 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.3-3.5-8.5s1.1-6.1 3.5-8.5Z" />
+      </svg>
+    </button>
+  );
   const projectChip = currentProject ? (
     <span className="project-chip" title={currentProject}>
       <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n${t('点一下在资源管理器里打开')}`}>📁 {projectLabel(currentProject)}</button>
@@ -389,12 +405,15 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
         </div>
       </aside>
 
-      <main className="content">
-        <ChatView sessionTitle={sessions.find(s => s.id === session?.id)?.title} active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} project={navMode === 'code' ? null : projectChip} codeMode={navMode === 'code'} composerTop={codeStrip} projectName={currentProject ? projectLabel(currentProject) : null} />
+      <main className={`content${browser.open && page === 'chat' ? ' with-pane' : ''}`}>
+        <div className="content-main">
+        <ChatView sessionTitle={sessions.find(s => s.id === session?.id)?.title} active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} project={<>{navMode === 'code' ? null : projectChip}{browserToggle}</>} codeMode={navMode === 'code'} composerTop={codeStrip} projectName={currentProject ? projectLabel(currentProject) : null} />
         {page === 'schedules' && <SchedulesPage controls={pageControls} />}
         {page === 'skills' && <SkillsPage controls={pageControls} />}
         {page === 'profile' && <ProfilePage controls={pageControls} userAvatar={userAvatar} onAvatar={setUserAvatar} />}
         {page === 'settings' && <SettingsPage controls={pageControls} />}
+        </div>
+        {browser.open && page === 'chat' && <BrowserPane state={browser} width={browserWidth} onWidth={setBrowserWidth} />}
       </main>
     </div>
   );

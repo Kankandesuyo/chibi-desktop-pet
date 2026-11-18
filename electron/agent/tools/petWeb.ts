@@ -1,7 +1,12 @@
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, Session, WebContents } from 'electron';
 import { defineTool } from '../types';
 
 let window: BrowserWindow | undefined;
+/** The pane inside the main window (set by the main process); without it a separate window is used. */
+let host: { contents(): Promise<WebContents>; close(): void } | null = null;
+/** The page searches and reads happen in (the pane's, or the separate window's). */
+let current: WebContents | undefined;
+export function setPetBrowserHost(h: typeof host): void { host = h; }
 /** Results of the last search, per task (helpers searching side by side must not swap results). */
 const sources = new Map<string, string[]>();
 /** There is one browser window: searches and reads take turns. */
@@ -17,17 +22,29 @@ const engines = {
   google: ['https://www.google.com/search?q=', '#search a:has(h3)'],
 } as const;
 
-function getWindow() {
-  if (window && !window.isDestroyed()) return window;
-  const { BrowserWindow, session } = require('electron') as typeof import('electron');
+const windows = new Set<BrowserWindow>();
+
+/** Separate, locked-down session for the pet's browsing: no permissions, no downloads, only http(s). */
+let research: Session | undefined;
+export function researchSession(): Session {
+  if (research) return research;
+  const { session } = require('electron') as typeof import('electron');
   const isolated = session.fromPartition('pet-web-research');
   isolated.setPermissionRequestHandler((_wc, _permission, respond) => respond(false));
   isolated.setPermissionCheckHandler(() => false);
   isolated.setDevicePermissionHandler(() => false);
   isolated.webRequest.onBeforeRequest((details, respond) => {
-    respond({ cancel: !/^https?:\/\//i.test(details.url) });
+    respond({ cancel: !/^(https?|data|blob):/i.test(details.url) });
   });
   if (!isolated.listenerCount('will-download')) isolated.on('will-download', event => event.preventDefault());
+  research = isolated;
+  return isolated;
+}
+
+function getWindow(newWindow = false) {
+  if (!newWindow && window && !window.isDestroyed()) return window;
+  const { BrowserWindow } = require('electron') as typeof import('electron');
+  const isolated = researchSession();
   const win = new BrowserWindow({
     title: '桌宠浏览器', width: 1000, height: 720, autoHideMenuBar: true,
     webPreferences: { session: isolated, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
@@ -35,15 +52,28 @@ function getWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (!/^https?:\/\//i.test(url)) event.preventDefault(); });
   win.on('page-title-updated', (event, title) => { event.preventDefault(); win.setTitle('桌宠浏览器 · ' + title.slice(0, 100)); });
-  win.on('closed', () => { window = undefined; sources.clear(); });
+  windows.add(win);
+  win.on('focus', () => { window = win; });
+  win.on('closed', () => {
+    windows.delete(win);
+    if (window === win) window = [...windows].at(-1);
+    if (!windows.size) sources.clear();
+  });
   window = win;
   return win;
 }
 
-async function visit(url: string, signal: AbortSignal) {
+async function visit(url: string, signal: AbortSignal, newWindow = false) {
   signal.throwIfAborted();
-  const win = getWindow();
-  const contents = win.webContents;
+  let contents: WebContents;
+  if (host) contents = await host.contents();
+  else {
+    const win = getWindow(newWindow);
+    if (win.isMinimized()) win.restore();
+    win.show();
+    contents = win.webContents;
+  }
+  current = contents;
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(25000)]);
   let cancel!: () => void;
   const stopped = new Promise<never>((_, reject) => {
@@ -54,6 +84,37 @@ async function visit(url: string, signal: AbortSignal) {
     await Promise.race([contents.loadURL(url), stopped]);
     return contents;
   } finally { deadline.removeEventListener('abort', cancel); }
+}
+
+export function openPetPage(url: string, signal: AbortSignal, newWindow = false) {
+  return exclusive(async () => {
+    const page = await visit(url, signal, newWindow);
+    return { title: page.getTitle(), url: page.getURL() };
+  });
+}
+
+export function extractPetPage(args: { selector?: string; maxChars?: number; includeLinks?: boolean }) {
+  return exclusive(async () => {
+    const page = current && !current.isDestroyed() ? current : window && !window.isDestroyed() ? window.webContents : undefined;
+    if (!page) throw new Error('请先在桌宠浏览器中打开网页');
+    const selector = JSON.stringify(args.selector ?? 'body');
+    const max = Math.min(30000, Math.max(200, args.maxChars ?? 8000));
+    const content = await page.executeJavaScriptInIsolatedWorld(999, [{ code: `(() => {
+      const node = document.querySelector(${selector});
+      if (!node) throw new Error('找不到指定的页面元素');
+      const text = node.innerText ?? node.textContent ?? '';
+      const links = ${!!args.includeLinks} ? Array.from(document.querySelectorAll('a[href]')).slice(0,40)
+        .map(a => ({ text: a.textContent.trim().slice(0,80), url: a.href })) : undefined;
+      return { text: text.slice(0,${max}), truncated: text.length > ${max}, links };
+    })()` }]) as { text: string; truncated: boolean; links?: { text: string; url: string }[] };
+    return { ...content, title: page.getTitle(), url: page.getURL() };
+  });
+}
+
+export function closePetBrowser() {
+  host?.close();
+  current = undefined;
+  for (const win of windows) if (!win.isDestroyed()) win.close();
 }
 
 export const petWebSearch = defineTool<{query: string; engine?: keyof typeof engines}>({

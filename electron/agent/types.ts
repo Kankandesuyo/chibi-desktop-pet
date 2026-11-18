@@ -22,7 +22,7 @@ export interface DesktopPlatform {
   /** How to start this pet itself (for "put your shortcut on my desktop"). */
   selfLaunch(): { target: string; args: string; icon?: string };
   openPath(p: string): Promise<string>;           // '' on success, error text otherwise
-  openUrl(url: string): Promise<void>;
+  openUrl(url: string, signal?: AbortSignal): Promise<void>;
   trash(p: string): Promise<void>;
   createShortcut(lnkPath: string, opts: { target: string; args?: string; cwd?: string; description?: string; icon?: string }): Promise<boolean>;
   listRunningApps(): Promise<RunningApp[]>;

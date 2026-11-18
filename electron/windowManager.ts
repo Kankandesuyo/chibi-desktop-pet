@@ -396,6 +396,8 @@ export class WindowManager {
   }
 
   private main: BrowserWindow | null = null;
+  /** The main window, if it exists (the browser pane lives in it). */
+  mainWindow(): BrowserWindow | null { return this.main && !this.main.isDestroyed() ? this.main : null; }
   private boundsTimer: NodeJS.Timeout | null = null;
   private quitting = false;
   /** Called when the app quits: the main window may really close now. */

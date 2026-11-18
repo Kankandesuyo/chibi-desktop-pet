@@ -173,13 +173,13 @@ const openPath = defineTool<{ path: string }>({
 
 const openUrl = defineTool<{ url: string }>({
   name: 'open_url', group: 'apps', riskLevel: 'low', requiresConfirmation: false,
-  description: '用默认浏览器打开网址（只允许 http/https）。要在网页上点击、填写、提取内容请用 browser_* 工具。',
+  description: '在桌宠内置浏览器打开网址（只允许 http/https）。要在网页上点击、填写、提取内容请用 browser_* 工具。',
   inputSchema: { type: 'object', properties: { url: { type: 'string', maxLength: 2000 } }, required: ['url'] },
   title: (a) => `打开网址 ${a.url}`,
   execute: async (a, ctx) => {
     const url = normalizeUrl(a.url);
     if (!url) return { ok: false, summary: '网址不合法', error: '只允许 http:// 或 https:// 网址' };
-    await ctx.platform.openUrl(url);
+    await ctx.platform.openUrl(url, ctx.signal);
     return { ok: true, summary: `已在浏览器打开 ${url}`, data: { url } };
   },
 });

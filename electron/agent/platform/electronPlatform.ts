@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { app, desktopCapturer, screen, shell } from 'electron';
 import type { DesktopPlatform, KnownFolders, UiAutomation } from '../types';
+import { openPetPage } from '../tools/petWeb';
 import { splitArgs } from './splitArgs';
 import * as win from './windowsShell';
 
@@ -66,7 +67,7 @@ export function createElectronPlatform(): DesktopPlatform {
         : { target: process.execPath, args: `"${app.getAppPath()}"`, icon: path.join(app.getAppPath(), 'build', 'icon.png') };
     },
     openPath: (p) => shell.openPath(p),
-    openUrl: (url) => shell.openExternal(url),
+    openUrl: async (url, signal) => { await openPetPage(url, signal ?? AbortSignal.timeout(25000)); },
     trash: (p) => shell.trashItem(p),
     async createShortcut(lnk, o) {
       if (!IS_WIN) return false;

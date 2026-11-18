@@ -22,6 +22,7 @@ import { openClaudeDesktop, registerIpcHandlers, type PetLife } from './ipcHandl
 import { WindowManager } from './windowManager';
 import { translate, type Lang } from '../shared/i18n';
 import { registerUpdater, updateStatus } from './updater';
+import { registerBrowserPane } from './browserPane';
 
 // Serve the built renderer from app://local/ instead of file:// so that fetch, canvas pixel reads
 // (used for per-pixel hit testing) and a strict Content-Security-Policy all work.
@@ -117,6 +118,7 @@ if (!app.requestSingleInstanceLock()) {
     const life: PetLife = { self, persona, activity, characters };
 
     const applySettings = registerIpcHandlers(config, windows, quit, life);
+    registerBrowserPane(windows);
 
     // ---- agent: tools, permissions, plugins (everything runs here in the main process) ----
     const agentDir = path.join(app.getPath('userData'), 'agent');
