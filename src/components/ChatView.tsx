@@ -26,8 +26,6 @@ interface Props {
   userAvatar: string;
   /** Something asked for the chat (dropped files, the hotkey): show this page. */
   onWanted(): void;
-  /** Title-bar controls drawn by the shell (pin, full screen). */
-  controls: JSX.Element;
   /** The project folder chip (when this conversation works in one). */
   project?: JSX.Element | null;
   /** The sidebar is in the code view: a code-style empty state and the project strip above the input. */
@@ -41,7 +39,7 @@ interface Props {
  * permission prompts and the plan; a trajectory tab with the raw event log; a composer with slash
  * commands and the permission mode; run stats and the context-window meter at the bottom.
  */
-export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, controls, project, codeMode = false, composerTop = null, projectName = null }: Props): JSX.Element {
+export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, project, codeMode = false, composerTop = null, projectName = null }: Props): JSX.Element {
   const { messages, streaming, requestId, notice, steps, plan, interim, confirms, send, stop, clear, answer, session } = useChatStore();
   const settings = useSettingsStore((s) => s.settings);
   const [text, setText] = useState('');
@@ -149,7 +147,6 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, c
           <button type="button" className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>{t('对话')}</button>
           <button type="button" className={tab === 'trajectory' ? 'on' : ''} onClick={() => setTab('trajectory')} title={t('每一次模型请求和工具调用的原始记录')}>{t('轨迹')}</button>
         </nav>
-        {controls}
       </header>
 
       {tab === 'trajectory' ? (
@@ -158,7 +155,7 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, c
         <div className="hx-scroll" ref={listRef}>
           <div className="hx-thread">
             {messages.length === 0 && !working && (
-              <div className="hx-welcome code">
+              <div className="hx-welcome code" lang={settings.language}>
                 <WelcomeAvatar key={settings.character + avatar} character={settings.character} avatar={avatar} name={name} t={t} />
                 <WelcomeGreeting callMe={settings.profile.callMe} displayName={settings.profile.displayName} />
                 {codeMode && projectName && <p>{t('{name}会在这个项目文件夹里读代码、改代码；删除文件和运行命令会先问你。', { name })}</p>}

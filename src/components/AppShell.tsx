@@ -263,18 +263,8 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const p = settings.profile;
   const me = p.displayName || p.callMe || t('我');
 
-  const controls = (
-    <span className="page-controls">
-      <button type="button" className={`tb-btn${panel.pinned ? ' on' : ''}`} onClick={() => control('toggle-pin')} title={panel.pinned ? t('已置顶：点一下取消') : t('窗口始终在最前面')}>📌</button>
-      <button type="button" className={`tb-btn${panel.fullscreen ? ' on' : ''}`} onClick={() => control('toggle-fullscreen')} title={panel.fullscreen ? t('退出全屏（F11 / Esc）') : t('全屏（F11）')}>{panel.fullscreen ? '⤡' : '⤢'}</button>
-    </span>
-  );
-  // Every page but the chat gets a close button (left of its title) that goes back to the chat; Esc does the same.
   const pageControls = (
-    <>
-      <button type="button" className="page-close" onClick={() => setPage('chat')} title={t('关闭，回到会话（Esc）')}>✕</button>
-      {controls}
-    </>
+    <button type="button" className="page-close" onClick={() => setPage('chat')} title={t('关闭，回到会话（Esc）')}>✕</button>
   );
   const row = (s: SessionSummary, markPinned: boolean): JSX.Element => {
     const locked = busy && s.id !== session?.id;
@@ -400,7 +390,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       </aside>
 
       <main className="content">
-        <ChatView sessionTitle={sessions.find(s => s.id === session?.id)?.title} active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} project={navMode === 'code' ? null : projectChip} codeMode={navMode === 'code'} composerTop={codeStrip} projectName={currentProject ? projectLabel(currentProject) : null} />
+        <ChatView sessionTitle={sessions.find(s => s.id === session?.id)?.title} active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} project={navMode === 'code' ? null : projectChip} codeMode={navMode === 'code'} composerTop={codeStrip} projectName={currentProject ? projectLabel(currentProject) : null} />
         {page === 'schedules' && <SchedulesPage controls={pageControls} />}
         {page === 'skills' && <SkillsPage controls={pageControls} />}
         {page === 'profile' && <ProfilePage controls={pageControls} userAvatar={userAvatar} onAvatar={setUserAvatar} />}

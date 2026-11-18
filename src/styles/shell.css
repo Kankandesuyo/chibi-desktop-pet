@@ -128,12 +128,8 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
 .is-full .page-head { margin-top: 0; padding-right: 16px; }
 .page-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; font-size: 14.5px; }
 .page-head > .hx-tabs, .page-head button, .page-head select { -webkit-app-region: no-drag; }
-.page-controls { display: flex; align-items: center; gap: 2px; height: 40px; margin-left: auto; -webkit-app-region: no-drag; }
 .page-close { order: -1; flex: none; width: 28px; height: 28px; margin-left: -8px; border: 0; border-radius: 7px; background: none; font-size: 13px; opacity: 0.6; -webkit-app-region: no-drag; }
 .page-close:hover { background: var(--chip); opacity: 1; }
-.tb-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: none; font-size: 14px; line-height: 1; opacity: 0.7; }
-.tb-btn:hover { background: var(--chip); opacity: 1; }
-.tb-btn.on { background: rgba(var(--accent-rgb), 0.16); opacity: 1; }
 .page-body { position: relative; flex: 1; min-height: 0; overflow-y: auto; }
 .page-narrow { max-width: 760px; margin: 0 auto; padding: 18px 28px 40px; }
 .page-lead { margin: 0 0 14px; line-height: 1.7; opacity: 0.8; }
