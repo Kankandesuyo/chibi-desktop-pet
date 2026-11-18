@@ -97,13 +97,18 @@ export class BrowserPane {
     this.view = view;
   }
 
+  /** The view currently placed in `host` (a closed pane makes a new view, which must be added again). */
+  private attached: WebContentsView | null = null;
+
   private attach(win: BrowserWindow): void {
     if (!this.view) return;
-    if (this.host !== win) {
-      if (this.host && !this.host.isDestroyed()) this.host.contentView.removeChildView(this.view);
+    if (this.host !== win || this.attached !== this.view) {
+      if (this.host && !this.host.isDestroyed() && this.attached) this.host.contentView.removeChildView(this.attached);
       win.contentView.addChildView(this.view);
+      this.attached = this.view;
+      if (this.host === win) { this.place(); return; }
       this.host = win;
-      win.once('closed', () => { if (this.host === win) { this.host = null; this.bounds = null; } });
+      win.once('closed', () => { if (this.host === win) { this.host = null; this.attached = null; this.bounds = null; } });
     }
     this.place();
   }
@@ -169,7 +174,8 @@ export class BrowserPane {
     this.show = false;
     this.error = '';
     if (v) {
-      if (this.host && !this.host.isDestroyed()) this.host.contentView.removeChildView(v);
+      if (this.host && !this.host.isDestroyed() && this.attached === v) this.host.contentView.removeChildView(v);
+      if (this.attached === v) this.attached = null;
       if (!v.webContents.isDestroyed()) v.webContents.close();
     }
     this.tell();
