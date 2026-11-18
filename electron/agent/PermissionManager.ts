@@ -12,6 +12,8 @@ export interface PermissionPolicy {
   /** Allowed, but every change inside is high risk (system folders when full disk access is on). */
   systemZones: string[];
   autoApproveMedium: boolean;
+  /** Full access: no confirmations (except publishing under the user's account); see AgentSettings.fullAccess. */
+  fullAccess?: boolean;
   /** The user's allow rule matching this call, if any (medium risk only; see permissionRules.ts). */
   allowRule?(tool: string, args: unknown): string | null;
   /**
@@ -44,7 +46,7 @@ export interface AuthorizeInput {
 }
 
 export type AuthorizeResult =
-  | { allowed: true; risk: RiskLevel; how: 'auto' | 'confirmed' | 'task-grant' | 'rule' | 'project'; rule?: string }
+  | { allowed: true; risk: RiskLevel; how: 'auto' | 'confirmed' | 'task-grant' | 'rule' | 'project' | 'full'; rule?: string }
   | { allowed: false; risk: RiskLevel; reason: string };
 
 const ORDER: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
@@ -134,6 +136,9 @@ export class PermissionManager {
   async authorize(input: AuthorizeInput): Promise<AuthorizeResult> {
     const risk = maxRisk(input.baseRisk, input.assessed);
     const grants = this.taskGrants.get(input.taskId);
+    // Full access asks nothing — except posting or sending something in the browser under the user's account.
+    const publishes = input.tool === 'browser_click' && risk === 'high';
+    if (this.policy().fullAccess && !publishes && !this.policy().isUnattended?.(input.taskId)) return { allowed: true, risk, how: 'full' };
     let needConfirm = input.alwaysConfirm || risk === 'high';
     // A user's allow rule covers medium risk only, and (like auto-approve) not after reading external content.
     if (!needConfirm && risk === 'medium' && !input.tainted) {

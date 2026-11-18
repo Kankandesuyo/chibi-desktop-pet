@@ -16,7 +16,7 @@ export function modeOf(s: Settings): ChatMode {
   return !(s.aiEnabled && s.ai.hasApiKey) ? 'offline' : s.agent.enabled ? 'agent' : 'chat';
 }
 
-const permissionOf = (s: Settings): PermissionMode => (s.agent.readOnly ? 'readonly' : s.agent.autoApproveMedium ? 'auto' : 'ask');
+const permissionOf = (s: Settings): PermissionMode => (s.agent.readOnly ? 'readonly' : s.agent.fullAccess ? 'full' : s.agent.autoApproveMedium ? 'auto' : 'ask');
 
 interface Props {
   /** This page is the one shown (it stays mounted, hidden, while another page is open). */
@@ -125,7 +125,8 @@ export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, p
   useEffect(() => { setCommandReply(null); }, [session?.id]);
 
   const setPermission = (m: PermissionMode): void => {
-    void window.petAPI.agentUpdateSettings({ readOnly: m === 'readonly', autoApproveMedium: m === 'auto' }).then((s) => useSettingsStore.getState().apply(s));
+    if (m === 'full' && !settings.agent.fullAccess && !window.confirm(t('完全访问：她可以访问整台电脑和网络，删除文件、运行命令等操作都不会再问你（以你的账号发布或发送内容仍会问）。确定开启吗？'))) return;
+    void window.petAPI.agentUpdateSettings({ readOnly: m === 'readonly', autoApproveMedium: m === 'auto', fullAccess: m === 'full' }).then((s) => useSettingsStore.getState().apply(s));
   };
 
   const badge = mode === 'offline' ? t('离线') : mode === 'agent' ? t('智能体') : t('聊天');

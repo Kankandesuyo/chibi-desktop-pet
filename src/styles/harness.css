@@ -112,8 +112,12 @@
 .hx-mode:hover, .hx-mode.open { background: var(--chip); }
 .hx-mode-caret { font-size: 9px; opacity: 0.5; }
 .hx-mode-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #2e8b57; }
+.hx-mode-icon { display: inline-flex; flex: none; opacity: 0.85; }
+.hx-mode-full, .hx-mode-menu button.hx-mode-full { color: #e8742a; }
+.hx-mode.hx-mode-full { border-color: rgba(232, 116, 42, 0.55); }
+.hx-mode-menu button.hx-mode-full small { opacity: 0.85; }
 .hx-mode-menu {
-  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30; display: flex; flex-direction: column; gap: 2px; width: 330px;
+  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30; display: flex; flex-direction: column; gap: 2px; width: min(460px, calc(100vw - 340px));
   padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 .hx-mode-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }

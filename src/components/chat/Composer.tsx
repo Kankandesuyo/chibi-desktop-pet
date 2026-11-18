@@ -3,13 +3,23 @@ import { SLASH_COMMANDS } from '../../../shared/harness';
 import { baseName } from './format';
 import { useT } from '../../i18n';
 
-export type PermissionMode = 'ask' | 'auto' | 'readonly';
+export type PermissionMode = 'readonly' | 'ask' | 'auto' | 'full';
 
-export const PERMISSION_LABEL: Record<PermissionMode, string> = { ask: '询问', auto: '自动允许中风险', readonly: '只读' };
+/** In menu order. */
+export const PERMISSION_LABEL: Record<PermissionMode, string> = { readonly: '只读', ask: '请求批准', auto: '替我批准', full: '完全访问' };
 const PERMISSION_HINT: Record<PermissionMode, string> = {
-  ask: '会改动电脑的步骤先问你；高风险每次都问',
-  auto: '中风险直接做（读过文件/网页后仍会问）；高风险每次都问',
   readonly: '只能查看，不能新建、移动、删除或运行任何东西',
+  ask: '改动文件、运行命令和上网操作前都先问你',
+  auto: '只在可能不安全的操作前问你',
+  full: '不受限制地访问网络和电脑上的任何文件，不再询问',
+};
+
+const ModeIcon = ({ mode }: { mode: PermissionMode }): JSX.Element => {
+  const common = { viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
+  if (mode === 'readonly') return <svg {...common}><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.8" /></svg>;
+  if (mode === 'ask') return <svg {...common}><path d="M8 11.5V5.8a1.5 1.5 0 0 1 3 0v5M11 10V4.5a1.5 1.5 0 0 1 3 0V10M14 10V5.8a1.5 1.5 0 0 1 3 0V13c0 4-2.4 7-6 7-2.6 0-4-1.3-5.4-3.4L3.8 13.8a1.4 1.4 0 0 1 2.2-1.7L8 14" /></svg>;
+  if (mode === 'auto') return <svg {...common}><rect x="3.5" y="4.5" width="17" height="15" rx="3" /><path d="m8 10 2.5 2.5L8 15M13 15h3.5" /></svg>;
+  return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.5M12 16.2v.3" /></svg>;
 };
 
 interface Props {
@@ -89,7 +99,7 @@ export function Composer(p: Props): JSX.Element {
                     className={`hx-mode-${m}${m === p.permission ? ' on' : ''}`}
                     onClick={() => { p.onPermission(m); setModeOpen(false); p.inputRef.current?.focus(); }}
                   >
-                    <span className="hx-mode-dot" />
+                    <span className="hx-mode-icon"><ModeIcon mode={m} /></span>
                     <span className="hx-mode-text"><b>{t(PERMISSION_LABEL[m])}</b><small>{t(PERMISSION_HINT[m])}</small></span>
                     {m === p.permission && <span className="hx-mode-check">✓</span>}
                   </button>
@@ -100,7 +110,7 @@ export function Composer(p: Props): JSX.Element {
               type="button" className={`hx-mode hx-mode-${p.permission}${modeOpen ? ' open' : ''}`} title={t(PERMISSION_HINT[p.permission])}
               onClick={() => setModeOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={modeOpen}
             >
-              <span className="hx-mode-dot" />
+              <span className="hx-mode-icon"><ModeIcon mode={p.permission} /></span>
               <span>{t(PERMISSION_LABEL[p.permission])}</span>
               <span className="hx-mode-caret">{modeOpen ? '▾' : '▴'}</span>
             </button>

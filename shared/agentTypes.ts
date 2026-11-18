@@ -15,6 +15,11 @@ export interface AgentSettings {
   /** Read-only mode: only tools that just look may run (she can investigate and plan, not change anything). */
   readOnly: boolean;
   /**
+   * Full access (like Codex's): every drive, and no confirmations at all — except publishing or sending
+   * something under the user's account in the browser. The pet's own data stays off-limits.
+   */
+  fullAccess: boolean;
+  /**
    * Rules like Claude Code's, e.g. "open_url(https://*.bilibili.com/*)". deny = never run;
    * allow = medium-risk calls run without asking (high risk always asks).
    */

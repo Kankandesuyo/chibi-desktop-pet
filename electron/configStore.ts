@@ -37,7 +37,7 @@ export interface MainWindowState { x: number; y: number; width: number; height: 
 
 const DEFAULT_AGENT: StoredAgent = {
   settings: {
-    enabled: true, autoApproveMedium: false, readOnly: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true,
+    enabled: true, autoApproveMedium: false, readOnly: false, fullAccess: false, permissionRules: { allow: [], deny: [] }, allowedRoots: [], fullDiskAccess: true,
     toolGroups: Object.fromEntries(TOOL_GROUPS.map((g) => [g, true])) as Record<ToolGroup, boolean>,
     toolProtocol: 'auto', maxSteps: 25, contextWindow: DEFAULT_CONTEXT_WINDOW, vision: { baseUrl: '', model: '' },
   },
@@ -112,6 +112,7 @@ export function sanitizeAgentSettings(input: unknown, base: StoredAgentSettings)
     enabled: bool(s.enabled, base.enabled),
     autoApproveMedium: bool(s.autoApproveMedium, base.autoApproveMedium),
     readOnly: bool(s.readOnly, base.readOnly),
+    fullAccess: bool(s.fullAccess, base.fullAccess ?? false),
     permissionRules: s.permissionRules === undefined ? base.permissionRules : sanitizeRules(s.permissionRules),
     fullDiskAccess: bool(s.fullDiskAccess, base.fullDiskAccess),
     allowedRoots: [...new Set(roots.filter((r): r is string => typeof r === 'string' && path.isAbsolute(r)).map((r) => r.slice(0, 500)))].slice(0, 30),

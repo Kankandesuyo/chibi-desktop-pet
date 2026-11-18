@@ -170,3 +170,33 @@ describe('project mode', () => {
     expect(finalSteps(r)[0]?.status).not.toBe('ok');
   });
 });
+
+describe('full access', () => {
+  it('runs high-risk steps anywhere without asking, and tells her to be careful', async () => {
+    h = makeHarness([], { settings: { fullAccess: true } });
+    const elsewhere = path.join(h.platform.drive, 'D', 'notes');           // not a default folder
+    fs.mkdirSync(elsewhere, { recursive: true });
+    fs.writeFileSync(path.join(elsewhere, 'old.txt'), 'x');
+    h.llm.push(
+      call('create_file', { path: path.join(elsewhere, 'new.txt'), content: 'hi' }),
+      call('delete_file', { path: path.join(elsewhere, 'old.txt') }),
+      say('好了'),
+    );
+    const r = await h.run('整理一下', { decide: () => 'deny' });
+    expect(r.confirms).toHaveLength(0);
+    expect(fs.existsSync(path.join(elsewhere, 'new.txt'))).toBe(true);
+    expect(fs.existsSync(path.join(elsewhere, 'old.txt'))).toBe(false);
+    expect(String(h.llm.requests[0]?.messages[0]?.content)).toContain('完全访问模式');
+  });
+
+  it("still keeps the pet's own data off-limits, and read-only wins", async () => {
+    h = makeHarness([], { settings: { fullAccess: true } });
+    h.llm.push(call('create_file', { path: path.join(h.baseDir, 'permissions.json'), content: '{}' }), say('好'));
+    const r = await h.run('改权限');
+    expect(finalSteps(r)[0]?.status).not.toBe('ok');
+    h.settings.readOnly = true;
+    h.llm.push(call('create_file', { path: path.join(h.platform.folders.desktop, 'x.txt'), content: 'x' }), say('好'));
+    await h.run('建个文件');
+    expect(fs.existsSync(path.join(h.platform.folders.desktop, 'x.txt'))).toBe(false);
+  });
+});
