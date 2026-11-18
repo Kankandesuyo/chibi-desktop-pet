@@ -209,6 +209,7 @@ export interface PetAPI {
   sessionsList(): Promise<{ current: string; sessions: SessionSummary[] } | { error: string }>;
   sessionOpen(id: string): Promise<{ ok: true; id: string } | { error: string }>;
   sessionNew(): Promise<{ ok: true; id: string } | { error: string }>;
+  sessionRename(id: string, name: string): Promise<{ ok: true } | { error: string }>;
   sessionPin(id: string, pinned: boolean): Promise<{ ok: true } | { error: string }>;
   /** Moves the conversation to sessions/trash/; deleting the open one opens the newest other one. */
   sessionDelete(id: string): Promise<{ ok: true; id: string } | { error: string }>;

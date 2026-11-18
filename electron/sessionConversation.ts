@@ -14,7 +14,7 @@ import type { ChatMessage } from '../shared/types';
 export interface SessionConversation {
   readonly messages: ChatRecord[];
   append(message: Partial<ChatRecord> & { role: 'user' | 'assistant'; content: string }): void;
-  clear(): void;
+  clear(project?: string | null): void;
   persist(): void;
 }
 
@@ -41,8 +41,8 @@ export function createSessionConversation(d: ConversationDeps) {
         mirror();
         onChange();
       },
-      clear() {
-        d.sessions.newSession();                     // notifies onSwitch → mirror + onChange
+      clear(project = null) {
+        d.sessions.openDraft(project);
         d.recaps.clear();
       },
       persist: mirror,

@@ -231,3 +231,26 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
   .app { grid-template-columns: 200px 1fr; }
   .split { grid-template-columns: 200px 1fr; }
 }
+
+.nav-name-form {
+  display: grid; gap: 10px; min-width: 0; margin: 2px 12px 8px; padding: 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink);
+}
+.nav-name-form label { display: grid; gap: 6px; font: inherit; font-size: 12px; font-weight: 600; }
+.nav-name-form input {
+  appearance: none; min-width: 0; width: 100%; box-sizing: border-box; padding: 7px 9px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  color: var(--ink); caret-color: var(--orange); font: inherit; font-size: 13px; font-weight: 400;
+}
+.nav-name-form input:focus { border-color: var(--orange); outline: 2px solid rgba(var(--accent-rgb), .19); outline-offset: 0; }
+.nav-name-form > div { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0; }
+.nav-name-form button {
+  appearance: none; padding: 5px 9px; min-height: 28px; border: 1px solid transparent;
+  border-radius: 7px; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 12px;
+}
+.nav-name-form button[type="submit"] { color: var(--orange); background: var(--orange-soft); font-weight: 600; }
+.nav-name-form button[type="submit"]:hover:enabled { border-color: var(--orange); }
+.nav-name-form button[type="button"]:hover { background: var(--surface); }
+.nav-name-form button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.nav-name-form button:disabled { opacity: .55; cursor: default; }
+.hx-session:focus-within .hx-session-actions { display: flex; }

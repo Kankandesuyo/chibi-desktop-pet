@@ -42,7 +42,7 @@ const COMMANDS: Command[] = [
     names: ['new', 'clear'], help: '开始新的会话：清空聊天记录，之前的任务不再带入',
     run: (_a, d) => {
       if (d.controller.isRunning()) return { reply: '她还在做上一个任务，先点“停止”再开新会话吧。' };
-      d.sessions.newSession();
+      d.sessions.openDraft();
       d.recaps.clear();
       return { reply: '好，重新开始～', action: 'clear' };
     },

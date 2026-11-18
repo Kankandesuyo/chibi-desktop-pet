@@ -1,0 +1,17 @@
+.welcome-pet { position: relative; }
+.welcome-pet button { display: grid; place-items: center; width: 80px; height: 80px; padding: 0; border-radius: 50%; border: 0; background: transparent; color: inherit; cursor: pointer; touch-action: manipulation; user-select: none; }
+.welcome-pet-face, .welcome-pet-lean { display: grid; width: 100%; height: 100%; place-items: center; transform-origin: 50% 74%; }
+.welcome-pet-face { border-radius: 50%; background: var(--orange-soft); }
+.hx-welcome .welcome-pet img { width: 100%; height: 100%; object-fit: cover; box-sizing: border-box; }
+.welcome-pet button:focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; }
+.welcome-pet-reply { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translate(-50%, 3px); white-space: nowrap; border-radius: 12px; font-size: 13px; background: var(--orange-soft); padding: 5px 12px; opacity: 0; pointer-events: none; }
+.welcome-pet-reply[data-visible="true"] { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: no-preference) {
+  .welcome-pet-lean { transform: translate(var(--pet-x, 0px), var(--pet-y, 0px)) rotate(var(--pet-tilt, 0deg)); transition: transform 240ms cubic-bezier(.2,.75,.3,1); }
+  .welcome-pet-face { transition: transform 160ms ease-out; }
+  .welcome-pet button:active .welcome-pet-face { transform: translateY(2px) scale(1.045,.95); }
+  .welcome-pet-reply { transition: opacity 160ms, transform 220ms ease-out; }
+}
+
+.welcome-pet-portrait { position: relative; display: block; width: 100%; height: 100%; overflow: hidden; border-radius: 50%; background: var(--orange-soft); }
+.hx-welcome .welcome-pet-portrait img { position: absolute; left: 50%; top: 50%; width: 310%; height: 310%; max-width: none; object-fit: contain; transform: translate(-50%, -33%); border: 0; border-radius: 0; }

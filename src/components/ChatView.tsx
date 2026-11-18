@@ -1,3 +1,5 @@
+import { WelcomeGreeting } from './WelcomeGreeting';
+import { WelcomeAvatar } from "./WelcomeAvatar";
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { withAttachments, type ChatCompose } from '../../shared/fileDrop';
 import type { Settings } from '../../shared/types';
@@ -18,6 +20,7 @@ const permissionOf = (s: Settings): PermissionMode => (s.agent.readOnly ? 'reado
 interface Props {
   /** This page is the one shown (it stays mounted, hidden, while another page is open). */
   active: boolean;
+  sessionTitle?: string;
   avatar: string;
   userAvatar: string;
   /** Something asked for the chat (dropped files, the hotkey): show this page. */
@@ -37,7 +40,7 @@ interface Props {
  * permission prompts and the plan; a trajectory tab with the raw event log; a composer with slash
  * commands and the permission mode; run stats and the context-window meter at the bottom.
  */
-export function ChatView({ active, avatar, userAvatar, onWanted, controls, project, codeMode = false, composerTop = null, projectName = null }: Props): JSX.Element {
+export function ChatView({ sessionTitle, active, avatar, userAvatar, onWanted, controls, project, codeMode = false, composerTop = null, projectName = null }: Props): JSX.Element {
   const { messages, streaming, requestId, notice, steps, plan, interim, confirms, send, stop, clear, answer, session } = useChatStore();
   const settings = useSettingsStore((s) => s.settings);
   const [text, setText] = useState('');
@@ -129,7 +132,7 @@ export function ChatView({ active, avatar, userAvatar, onWanted, controls, proje
   const liveSteps = steps.filter((s) => s.tool !== 'update_plan');
   const placeholder = hint ?? (mode === 'agent' ? `和${name}说点什么，或让她帮你做事…（输入 / 用命令）` : mode === 'chat' ? `和${name}说点什么…` : '输入消息，回车发送');
   const firstUser = messages.find((m) => m.role === 'user')?.content.split('\n')[0] ?? '';
-  const title = firstUser ? firstUser.slice(0, 60) : '新会话';
+  const title = sessionTitle ?? (firstUser ? firstUser.slice(0, 60) : '新会话');
   const userFace = userAvatar
     ? <img src={userAvatar} alt="" className="hx-avatar small" />
     : <span className="hx-avatar small hx-avatar-letter">{(settings.profile.displayName || settings.profile.callMe || '我').slice(0, 1)}</span>;
@@ -152,26 +155,13 @@ export function ChatView({ active, avatar, userAvatar, onWanted, controls, proje
       ) : (
         <div className="hx-scroll" ref={listRef}>
           <div className="hx-thread">
-            {messages.length === 0 && !working && codeMode && (
+            {messages.length === 0 && !working && (
               <div className="hx-welcome code">
-                <svg className="code-mark" viewBox="0 0 48 48" width="56" height="56" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M15 36.5h18a9 9 0 0 0 2.3-17.7A11 11 0 0 0 14 17.5a9.5 9.5 0 0 0 1 19Z" />
-                  <path d="m18.5 23.5 4 4-4 4M25 31.5h5.5" />
-                </svg>
-                <h2>{projectName ? `在 ${projectName} 里做点什么？` : '我们来做点什么？'}</h2>
-                <p>{projectName ? `${name}会在这个项目文件夹里读代码、改代码；删除文件和运行命令会先问你。` : '在下面选一个项目文件夹，或者直接在这台电脑上做。'}</p>
-              </div>
-            )}
-            {messages.length === 0 && !working && !codeMode && (
-              <div className="hx-welcome">
-                {avatar && <img src={avatar} alt="" />}
-                <h3>{settings.profile.callMe ? `${settings.profile.callMe}，你好呀` : `我是${name}`}</h3>
-                <p>
-                  {mode === 'offline' && '还没有配置 AI：现在是离线模式，她只会说几句简单的话。在“设置 → AI 聊天”里填好 API 就能真正聊天。'}
-                  {mode === 'chat' && `和${name}说点什么吧～`}
-                  {mode === 'agent' && '说点什么，或者让我帮你做事。有风险的操作会先问你。'}
-                </p>
-                {mode === 'agent' && (
+                <WelcomeAvatar key={settings.character + avatar} character={settings.character} avatar={avatar} name={name} t={(s) => s} />
+                <WelcomeGreeting callMe={settings.profile.callMe} displayName={settings.profile.displayName} />
+                {codeMode && projectName && <p>{`${name}会在这个项目文件夹里读代码、改代码；删除文件和运行命令会先问你。`}</p>}
+                {!codeMode && mode === 'offline' && <p>{'还没有配置 AI：现在是离线模式，她只会说几句简单的话。在“设置 → AI 聊天”里填好 API 就能真正聊天。'}</p>}
+                {!codeMode && mode === 'agent' && (
                   <div className="hx-suggest">
                     {['在桌面建一个叫 AI项目 的文件夹', '帮我找昨天下载的 PDF', '看看我的电脑现在卡不卡', '每天早上 9 点帮我看看下载文件夹'].map((s) => (
                       <button key={s} type="button" onClick={() => { setText(s); inputRef.current?.focus(); }}>{s}</button>

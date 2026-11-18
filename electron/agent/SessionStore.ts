@@ -72,7 +72,7 @@ export class SessionStore {
   /** A turn the next request should pick up again (set by /resume). */
   private pendingResume: TurnRecord | null = null;
   private readonly switchListeners = new Set<() => void>();
-  private readonly titleCache = new Map<string, { mtime: number; title: string }>();
+  private readonly titleCache = new Map<string, { mtime: number; title: string; untouched: boolean }>();
   /** Per-session extras kept beside the logs (sessions/meta.json): pinned, project folder. */
   private meta: Record<string, SessionMeta> = {};
   id = '';
@@ -128,6 +128,13 @@ export class SessionStore {
       if (t.reason !== null) continue;
       this.append({ type: 'turn/end', turnId: t.turnId, reason: 'interrupted', outcome: 'cancelled' });
     }
+  }
+
+  openDraft(project: string | null = null): string {
+    const existing = this.list(Infinity).find(row =>
+      !this.meta[row.id]?.title && !row.pinned && (row.project ?? null) === project && this.titleCache.get(row.id)?.untouched);
+    if (existing && this.switchTo(existing.id)) return existing.id;
+    return this.newSession();
   }
 
   newSession(): string {
@@ -207,23 +214,40 @@ export class SessionStore {
       const id = name.slice(0, -'.jsonl'.length);
       if (!ID_RE.test(id)) continue;
       const file = path.join(this.dir, name);
+      let size = 0;
       let mtime = 0;
-      try { mtime = fs.statSync(file).mtimeMs; } catch { continue; }
+      try { const stat = fs.statSync(file); mtime = stat.mtimeMs; size = stat.size; } catch { continue; }
       let title = this.titleCache.get(id);
-      if (!title || title.mtime !== mtime) { title = { mtime, title: firstUserText(file) }; this.titleCache.set(id, title); }
+      if (!title || title.mtime !== mtime) { title = { mtime, title: firstUserText(file), untouched: size <= 256 && isUntouchedLog(file) }; this.titleCache.set(id, title); }
       const m = this.meta[id];
-      out.push({ id, title: title.title, updatedAt: Math.round(mtime), current: id === this.id, ...(m?.pinned ? { pinned: true } : {}), ...(m?.project ? { project: m.project } : {}) });
+      out.push({ id, title: m?.title ?? title.title, updatedAt: Math.round(mtime), current: id === this.id, ...(m?.pinned ? { pinned: true } : {}), ...(m?.project ? { project: m.project } : {}) });
     }
-    return out.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+    const sorted = out.sort((a, b) => b.updatedAt - a.updatedAt);
+    const drafts = new Map<string, string>();
+    for (const row of sorted) {
+      if (this.meta[row.id]?.title || row.pinned || !this.titleCache.get(row.id)?.untouched) continue;
+      const scope = row.project ?? '';
+      if (!drafts.has(scope) || row.current) drafts.set(scope, row.id);
+    }
+    return sorted.filter(row => this.meta[row.id]?.title || row.pinned || !this.titleCache.get(row.id)?.untouched || drafts.get(row.project ?? '') === row.id).slice(0, limit);
   }
 
   // ---- pin / delete / project folder ----
   private saveMeta(): void {
-    for (const [k, v] of Object.entries(this.meta)) if (!v.pinned && !v.project) delete this.meta[k];
+    for (const [k, v] of Object.entries(this.meta)) if (!v.title && !v.pinned && !v.project) delete this.meta[k];
     try { fs.writeFileSync(path.join(this.dir, 'meta.json'), JSON.stringify(this.meta, null, 1), 'utf8'); } catch (err) { console.error('[session] meta', err); }
   }
 
   private exists(id: string): boolean { return ID_RE.test(id) && fs.existsSync(path.join(this.dir, `${id}.jsonl`)); }
+
+  rename(id: string, name: string): boolean {
+    if (!this.exists(id) || typeof name !== 'string') return false;
+    const title = name.trim();
+    if (!title || title.length > 80 || /[\r\n]/.test(title)) return false;
+    this.meta[id] = { ...this.meta[id], title };
+    this.saveMeta();
+    return true;
+  }
 
   setPinned(id: string, pinned: boolean): boolean {
     if (!this.exists(id)) return false;
@@ -243,14 +267,12 @@ export class SessionStore {
   }
 
   /**
-   * Deletes a saved session: its log goes to sessions/trash/ (not destroyed, in case it was a mistake).
+   * Permanently deletes the selected session log.
    * Deleting the open one switches to the newest other session, or a new one.
    */
   remove(id: string): boolean {
     if (!this.exists(id)) return false;
-    const trash = path.join(this.dir, 'trash');
-    fs.mkdirSync(trash, { recursive: true });
-    fs.renameSync(path.join(this.dir, `${id}.jsonl`), path.join(trash, `${id}.jsonl`));
+    fs.unlinkSync(path.join(this.dir, `${id}.jsonl`));
     delete this.meta[id];
     this.saveMeta();
     this.titleCache.delete(id);
@@ -267,7 +289,15 @@ export class SessionStore {
   }
 }
 
-interface SessionMeta { pinned?: boolean; project?: string }
+/** Only a single, valid creation event qualifies. Never hide malformed logs or failed turns. */
+function isUntouchedLog(file: string): boolean {
+  try {
+    const event = JSON.parse(fs.readFileSync(file, 'utf8').trim());
+    return event?.type === 'session/start' && event.seq === 1;
+  } catch { return false; }
+}
+
+interface SessionMeta { title?: string; pinned?: boolean; project?: string }
 
 function readMeta(file: string): Record<string, SessionMeta> {
   try {
@@ -277,7 +307,7 @@ function readMeta(file: string): Record<string, SessionMeta> {
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
       if (!ID_RE.test(k) || !v || typeof v !== 'object') continue;
       const m = v as Record<string, unknown>;
-      out[k] = { ...(m.pinned === true ? { pinned: true } : {}), ...(typeof m.project === 'string' && path.isAbsolute(m.project) ? { project: m.project } : {}) };
+      out[k] = { ...(typeof m.title === 'string' && m.title.trim() ? { title: m.title.trim().slice(0, 80) } : {}), ...(m.pinned === true ? { pinned: true } : {}), ...(typeof m.project === 'string' && path.isAbsolute(m.project) ? { project: m.project } : {}) };
     }
     return out;
   } catch { return {}; }

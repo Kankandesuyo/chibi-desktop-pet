@@ -159,7 +159,17 @@ function Toggle(props: { label: string; field: BoolKey; settings: Settings; hint
   );
 }
 
-export function SettingsPanel(): JSX.Element {
+export type SettingsSection = 'set-look' | 'set-her' | 'set-ai' | 'set-agent';
+
+function Category({ id, active, children }: { id: SettingsSection; active: SettingsSection; children: React.ReactNode }): JSX.Element {
+  return (
+    <section id={id + '-page'} className="page-body" hidden={id !== active} aria-labelledby={id}>
+      <div className="page-narrow"><div className="settings">{children}</div></div>
+    </section>
+  );
+}
+
+export function SettingsPanel({ active }: { active: SettingsSection }): JSX.Element {
   const { settings, loaded, apply, updateAi } = useSettingsStore();
   const [baseUrl, setBaseUrl] = useState('');
   const [model, setModel] = useState('');
@@ -189,43 +199,47 @@ export function SettingsPanel(): JSX.Element {
   };
 
   return (
-    <div className="settings">
-      <h2 id="set-look">外观与动作</h2>
-      <label className="row"><span>窗口外观<small>主窗口的浅色 / 深色（左下角的按钮也能切换）</small></span>
-        <select value={settings.uiMode} onChange={(e) => void useSettingsStore.getState().update({ uiMode: e.target.value as UiMode })}>
-          <option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option>
-        </select></label>
-      <Slider label="桌宠大小" field="size" min={SIZE_MIN} max={SIZE_MAX} step={0.05} settings={settings} format={pct} />
-      <Slider label="透明度" field="opacity" min={0.3} max={1} step={0.05} settings={settings} format={pct} />
-      <Slider label="动作速度" field="speed" min={0.5} max={2} step={0.1} settings={settings} format={(v) => `${v.toFixed(1)}×`} />
-      <Slider label="自动活动频率" field="autoMoveFrequency" min={0} max={1} step={0.05} settings={settings} format={pct} />
-      <Toggle label="自动走动" field="autoMove" settings={settings} />
-      <Toggle label="允许拖动" field="allowDrag" settings={settings} />
-      <Toggle label="松手后掉到屏幕底部" field="gravity" settings={settings} />
-      <Toggle label="始终置顶" field="alwaysOnTop" settings={settings} />
-      <Toggle label="音效" field="sound" settings={settings} />
-      <Toggle label="开机启动" field="launchAtLogin" settings={settings} />
-      <HotkeyRow settings={settings} />
+    <>
+      <Category id="set-look" active={active}>
+        <h2 id="set-look">外观与动作</h2>
+        <label className="row"><span>窗口外观<small>主窗口的浅色 / 深色（左下角的按钮也能切换）</small></span>
+          <select value={settings.uiMode} onChange={(e) => void useSettingsStore.getState().update({ uiMode: e.target.value as UiMode })}>
+            <option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option>
+          </select></label>
+        <Slider label="桌宠大小" field="size" min={SIZE_MIN} max={SIZE_MAX} step={0.05} settings={settings} format={pct} />
+        <Slider label="透明度" field="opacity" min={0.3} max={1} step={0.05} settings={settings} format={pct} />
+        <Slider label="动作速度" field="speed" min={0.5} max={2} step={0.1} settings={settings} format={(v) => `${v.toFixed(1)}×`} />
+        <Slider label="自动活动频率" field="autoMoveFrequency" min={0} max={1} step={0.05} settings={settings} format={pct} />
+        <Toggle label="自动走动" field="autoMove" settings={settings} />
+        <Toggle label="允许拖动" field="allowDrag" settings={settings} />
+        <Toggle label="松手后掉到屏幕底部" field="gravity" settings={settings} />
+        <Toggle label="始终置顶" field="alwaysOnTop" settings={settings} />
+        <Toggle label="音效" field="sound" settings={settings} />
+        <Toggle label="开机启动" field="launchAtLogin" settings={settings} />
+        <HotkeyRow settings={settings} />
 
-      <PersonaSection settings={settings} />
+      </Category>
+      <Category id="set-her" active={active}><PersonaSection settings={settings} /></Category>
+      <Category id="set-ai" active={active}>
 
-      <h2 id="set-ai">AI 聊天</h2>
-      <Toggle label="启用 AI" field="aiEnabled" settings={settings} hint="关闭时聊天用离线短句" />
-      <label className="row col"><span>Base URL（OpenAI 兼容）</span>
-        <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.deepseek.com" />
-      </label>
-      <label className="row col"><span>模型名称</span>
-        <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
-      </label>
-      <label className="row col"><span>API Key {settings.ai.hasApiKey ? '（已保存，留空表示不修改）' : '（未保存）'}</span>
-        <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" autoComplete="off" />
-      </label>
-      <div className="row">
-        <small>Key 只保存在本机并由系统加密，聊天请求由主进程发出，页面拿不到它。</small>
-        <button type="button" onClick={() => void saveAi()}>{saved ? '已保存 ✓' : '保存 AI 配置'}</button>
-      </div>
+        <h2 id="set-ai">AI 聊天</h2>
+        <Toggle label="启用 AI" field="aiEnabled" settings={settings} hint="关闭时聊天用离线短句" />
+        <label className="row col"><span>Base URL（OpenAI 兼容）</span>
+          <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.deepseek.com" />
+        </label>
+        <label className="row col"><span>模型名称</span>
+          <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
+        </label>
+        <label className="row col"><span>API Key {settings.ai.hasApiKey ? '（已保存，留空表示不修改）' : '（未保存）'}</span>
+          <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" autoComplete="off" />
+        </label>
+        <div className="row">
+          <small>Key 只保存在本机并由系统加密，聊天请求由主进程发出，页面拿不到它。</small>
+          <button type="button" onClick={() => void saveAi()}>{saved ? '已保存 ✓' : '保存 AI 配置'}</button>
+        </div>
 
-      <AgentSettingsPanel settings={settings} />
-    </div>
+      </Category>
+      <Category id="set-agent" active={active}><AgentSettingsPanel settings={settings} /></Category>
+    </>
   );
 }

@@ -62,6 +62,7 @@ const api: PetAPI = {
   sessionsList: () => ipcRenderer.invoke('chat:sessions'),
   sessionOpen: (id) => ipcRenderer.invoke('chat:session-open', id),
   sessionNew: () => ipcRenderer.invoke('chat:session-new'),
+  sessionRename: (id, name) => ipcRenderer.invoke('chat:session-rename', id, name),
   sessionPin: (id, pinned) => ipcRenderer.invoke('chat:session-pin', id, pinned),
   sessionDelete: (id) => ipcRenderer.invoke('chat:session-delete', id),
   sessionProject: (folder, fresh) => ipcRenderer.invoke('chat:session-project', folder, fresh),

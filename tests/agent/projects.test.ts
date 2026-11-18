@@ -14,6 +14,28 @@ afterEach(() => { h?.cleanup(); h = undefined; platform?.cleanup(); platform = u
 describe('SessionStore: pin, delete, project', () => {
   const make = (): SessionStore => { platform = new FakePlatform(); return new SessionStore(path.join(platform.root, 'sessions')); };
 
+  it('reuses an untouched draft from history and shows one per project', () => {
+    const s = make();
+    const original = s.id;
+    expect(s.openDraft()).toBe(original);
+    s.addChat({ id: 'msg', role: 'user', content: '新会话' });
+    const unused = s.openDraft();
+    const other = s.newSession(); // a duplicate created by an older version
+    expect(s.list().map(x => x.id).sort()).toEqual([original, other].sort());
+    s.switchTo(original);
+    const draft = s.openDraft();
+    expect([unused, other]).toContain(draft);
+    expect(s.openDraft()).toBe(draft);
+    expect(new SessionStore(s.dir).openDraft()).toBe(draft);
+    const folder = platform!.folders.documents;
+    const project = s.openDraft(folder);
+    s.setProject(folder);
+    expect(s.openDraft(folder)).toBe(project);
+    expect(s.openDraft()).toBe(draft);
+    expect(s.switchTo(original)).toBe(true);
+    expect(s.chat()[0]?.content).toBe('新会话');
+  });
+
   it('pins and remembers it across a restart', () => {
     const s = make();
     const a = s.id;
@@ -28,7 +50,7 @@ describe('SessionStore: pin, delete, project', () => {
     expect(s.setPinned('20990101-000000-zzzz', true)).toBe(false);
   });
 
-  it('deletes into trash/, and deleting the open one opens another', () => {
+  it('permanently deletes the selected log, and deleting the open one opens another', () => {
     const s = make();
     const a = s.id;
     s.addChat({ id: '旧的', role: 'user', content: '旧的' });
@@ -37,7 +59,8 @@ describe('SessionStore: pin, delete, project', () => {
     expect(s.remove(b)).toBe(true);
     expect(s.id).toBe(a);
     expect(s.list().map((x) => x.id)).toEqual([a]);
-    expect(fs.existsSync(path.join(s.dir, 'trash', `${b}.jsonl`))).toBe(true);
+    expect(fs.existsSync(path.join(s.dir, `${b}.jsonl`))).toBe(false);
+    expect(fs.existsSync(path.join(s.dir, 'trash', `${b}.jsonl`))).toBe(false);
     expect(s.remove(a)).toBe(true);                  // the last one: a fresh session takes its place
     expect(s.id).not.toBe(a);
     expect(s.list()).toHaveLength(1);

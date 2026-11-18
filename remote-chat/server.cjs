@@ -180,7 +180,7 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
       if (!isDir) throw badRequest('这个文件夹不存在');
       if (path.parse(folder).root === folder) throw badRequest('不能把整个磁盘当作项目，请选一个具体的文件夹');
     }
-    if (fresh) conversation.clear();
+    if (fresh) conversation.clear(folder);
     const before = st.project();
     st.setProject(folder);
     // Must be a place she may change (not the pet's own data, Windows, Program Files…).
@@ -236,6 +236,11 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
     handle('chat:session-open', openSession);
     handle('chat:session-new', newSession);
     handle('chat:trajectory', trajectory);
+    handle('chat:session-rename', (id, name) => {
+      if (!sessionsOf()?.rename(id, name)) throw badRequest('会话不存在或名称无效');
+      changed();
+      return { ok: true };
+    });
     handle('chat:session-pin', pinSession);
     handle('chat:session-delete', deleteSession);
     handle('chat:session-project', setProject);

@@ -56,6 +56,7 @@ const Caret = ({ open }: { open: boolean }): JSX.Element => (
  * window buttons sit over the top-right corner of the page header.
  */
 export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
+  const t = (text: string) => text;
   const [page, setPage] = useState<Page>(initialPage);
   const [menu, setMenu] = useState(false);
   const [navMode, setNavModeState] = useState<NavMode>(() => load<NavMode>('nav.mode', 'chat'));
@@ -74,6 +75,11 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const settings = useSettingsStore((s) => s.settings);
   const { requestId, session, messages } = useChatStore();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [namedProjects, setNamedProjects] = useState<Record<string, string>>(() => load('nav.namedProjects', {}));
+  const [naming, setNaming] = useState<{ kind: 'group' } | { kind: 'session'; id: string } | null>(null);
+  const [nameInput, setNameInput] = useState('');
+  const savingName = useRef(false);
+  const projectLabel = (folder: string) => namedProjects[folder] ?? folderName(folder);
   const [avatar, setAvatar] = useState('');
   const [userAvatar, setUserAvatar] = useState('');
   const [panel, setPanel] = useState<PanelState>({ pinned: false, fullscreen: false, maximized: false });
@@ -155,13 +161,6 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     if (report(await window.petAPI.sessionProject(folder, fresh))) setNavMode('code');
     refreshSessions();
   };
-  /** A new, empty conversation in the code view: the project is chosen above the input box (like Codex). */
-  const newCodeThread = (): void => {
-    setPage('chat');
-    setNavMode('code');
-    if (useChatStore.getState().requestId) return;
-    void window.petAPI.sessionNew().then((r) => { if (report(r) && 'id' in r) setCodeDraftId(r.id); refreshSessions(); });
-  };
   /** From the strip above the input: work in this folder (the open conversation if it is still empty, else a new one). */
   const useProject = async (folder: string | null): Promise<void> => {
     setPickOpen(false);
@@ -190,12 +189,13 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const unbindProject = async (): Promise<void> => { report(await window.petAPI.sessionProject(null)); refreshSessions(); };
   const togglePin = async (s: SessionSummary): Promise<void> => { report(await window.petAPI.sessionPin(s.id, !s.pinned)); refreshSessions(); };
   const removeSession = async (s: SessionSummary): Promise<void> => {
-    if (!window.confirm(`删除会话「${s.title}」？\n\n它会被移到智能体数据里的 sessions\\trash 文件夹，需要时还能找回。`)) return;
+    if (!window.confirm(`删除会话「${s.title}」？\n\n该会话记录将被永久删除，此操作无法撤销。`)) return;
     report(await window.petAPI.sessionDelete(s.id));
     refreshSessions();
   };
 
   function newSession(): void {
+    setCodeDraftId(null);
     setPage('chat');
     setNavMode('chat');
     if (useChatStore.getState().requestId) return;
@@ -211,6 +211,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   for (const s of chats) if (!s.pinned) groups.set(dayGroup(s.updatedAt), [...(groups.get(dayGroup(s.updatedAt)) ?? []), s]);
   // Code view: one folder per project (most recently used first), its conversations inside, pinned first.
   const projects = new Map<string, SessionSummary[]>();
+  for (const folder of Object.keys(namedProjects)) projects.set(folder, []);
   for (const s of sessions) if (s.project) projects.set(s.project, [...(projects.get(s.project) ?? []), s]);
   for (const list of projects.values()) list.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt);
   const currentProject = sessions.find((s) => s.current)?.project ?? null;
@@ -224,7 +225,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     if (want !== navMode) setNavMode(want);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId, currentProject, codeDraftId]);
-  const recentProjects = [...new Set(sessions.filter((s) => s.project).map((s) => s.project as string))].slice(0, 8);
+  const recentProjects = [...projects.keys()];
   // Above the input box in the code view: where she works — the whole computer, or a project folder.
   const codeStrip = navMode === 'code' ? (
     <div className="code-strip">
@@ -233,14 +234,14 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       </button>
       <div className="code-strip-pick" ref={pickRef}>
         <button type="button" className={`code-strip-tab${currentProject ? ' on' : ''}`} onClick={() => setPickOpen((o) => !o)} disabled={busy} title={currentProject ?? '选一个项目文件夹'} aria-haspopup="listbox" aria-expanded={pickOpen}>
-          <FolderIcon /><span className="code-strip-name">{currentProject ? folderName(currentProject) : '选择项目'}</span><Caret open={pickOpen} />
+          <FolderIcon /><span className="code-strip-name">{currentProject ? projectLabel(currentProject) : '选择项目'}</span><Caret open={pickOpen} />
         </button>
         {pickOpen && (
           <div className="code-strip-menu" role="listbox">
             {recentProjects.length > 0 && <div className="code-strip-label">最近的项目</div>}
             {recentProjects.map((f) => (
               <button key={f} type="button" role="option" aria-selected={f === currentProject} className={f === currentProject ? 'on' : ''} onClick={() => void useProject(f)} title={f}>
-                <FolderIcon /><span className="code-strip-item"><b>{folderName(f)}</b><small>{f}</small></span>
+                <FolderIcon /><span className="code-strip-item"><b>{projectLabel(f)}</b><small>{f}</small></span>
               </button>
             ))}
             {recentProjects.length > 0 && <hr />}
@@ -252,7 +253,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   ) : null;
   const projectChip = currentProject ? (
     <span className="project-chip" title={currentProject}>
-      <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n点一下在资源管理器里打开`}>📁 {folderName(currentProject)}</button>
+      <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n点一下在资源管理器里打开`}>📁 {projectLabel(currentProject)}</button>
       <button type="button" className="project-chip-btn" onClick={() => void chooseProject(false)} disabled={busy} title="换一个项目文件夹">换</button>
       <button type="button" className="project-chip-btn" onClick={() => void unbindProject()} disabled={busy} title="这个对话不再绑定项目文件夹">✕</button>
     </span>
@@ -281,7 +282,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
         key={s.id} role="button" tabIndex={0} aria-disabled={locked}
         className={`hx-session${s.id === session?.id ? ' current' : ''}${locked ? ' locked' : ''}`}
         onClick={() => { if (!locked) openSession(s.id); }}
-        onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); openSession(s.id); } }}
+        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); openSession(s.id); } }}
         title={`${s.title}${s.project ? `\n📁 ${s.project}` : ''}`}
       >
         <span className="hx-session-main">
@@ -289,6 +290,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
         </span>
         <span className="hx-session-time">{shortDate(s.updatedAt)}</span>
         <span className="hx-session-actions">
+          <button type="button" title={t('重命名会话')} onClick={e => { e.stopPropagation(); setNaming({ kind: 'session', id: s.id }); setNameInput(s.title); }}>✎</button>
           <button type="button" className={s.pinned ? 'on' : ''} title={s.pinned ? '取消置顶' : '置顶'} onClick={(e) => { e.stopPropagation(); void togglePin(s); }}>📌</button>
           <button type="button" title="删除这个会话" disabled={busy && s.id === session?.id} onClick={(e) => { e.stopPropagation(); void removeSession(s); }}>🗑</button>
         </span>
@@ -308,11 +310,38 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
             <button type="button" role="tab" aria-selected={navMode === 'code'} className={navMode === 'code' ? 'on' : ''} onClick={() => setNavMode('code')} title="代码：项目和项目里的对话"><CodeIcon /></button>
           </span>
         </div>
-        {navMode === 'chat' ? (
+        {navMode === 'chat' && (
           <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? '她正在做事，做完再开新会话' : '开始新会话（Ctrl+N，/new）'}>＋ 新会话</button>
-        ) : (
-          <button type="button" className="nav-new" onClick={newCodeThread} disabled={busy} title="新的代码对话：在输入框上面选项目文件夹（或者直接在这台电脑上做）">＋ 新对话</button>
         )}
+        {navMode === 'code' && <button type="button" className="nav-new" disabled={busy} onClick={() => { setNaming({ kind: 'group' }); setNameInput(''); }}>{t('＋ 创建项目组')}</button>}
+        {naming && <form className="nav-name-form" onSubmit={async e => {
+          e.preventDefault();
+          const value = nameInput.trim();
+          if (!value || savingName.current) return;
+          savingName.current = true;
+          try {
+            if (naming.kind === 'session') {
+              if (!report(await window.petAPI.sessionRename(naming.id, value))) return;
+            } else {
+              const folder = await window.petAPI.agentPickFolder();
+              if (!folder || !report(await window.petAPI.sessionProject(folder, true))) return;
+              const next = { ...namedProjects, [folder]: value };
+              save('nav.namedProjects', next);
+              setNamedProjects(next);
+              setPage('chat');
+              setNavMode('code');
+              setFolded(f => { const open = f.filter(k => k !== 'all:code' && k !== 'p:' + folder); save('nav.folded', open); return open; });
+            }
+            setNaming(null);
+            refreshSessions();
+          } finally { savingName.current = false; }
+        }}>
+          <label>{naming.kind === 'group' ? t('项目组名称') : t('会话名称')}
+            <input autoFocus maxLength={80} value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setNaming(null); } }} />
+          </label>
+          <div><button type="submit" disabled={!nameInput.trim()}>{naming.kind === 'group' ? t('选择工作文件夹') : t('保存')}</button>
+          <button type="button" onClick={() => setNaming(null)}>{t('取消')}</button></div>
+        </form>}
         <div className="nav-group nav-main">
           <button type="button" className="nav-fold-all" onClick={() => toggleFold(`all:${navMode}`)} title={isFolded(`all:${navMode}`) ? '展开' : '折叠全部'}>
             <Caret open={!isFolded(`all:${navMode}`)} />
@@ -333,14 +362,14 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
               <section key={folder} className="nav-project">
                 <div className={`nav-project-head${list.some((s) => s.current) ? ' current' : ''}`} title={folder}>
                   <button type="button" className="nav-project-name" onClick={() => toggleFold(`p:${folder}`)}>
-                    <Caret open={!isFolded(`p:${folder}`)} /><span className="nav-project-icon">📁</span><span className="nav-project-label">{folderName(folder)}</span>
+                    <Caret open={!isFolded(`p:${folder}`)} /><span className="nav-project-icon">📁</span><span className="nav-project-label">{projectLabel(folder)}</span>
                   </button>
                   <button type="button" className="nav-project-add" onClick={() => void newThread(folder)} disabled={busy} title="在这个项目里开一个新对话（新分支）">＋</button>
                 </div>
                 {!isFolded(`p:${folder}`) && <div className="nav-project-threads">{list.map((s) => row(s, true))}</div>}
               </section>
             ))}
-            {!isFolded(`all:${navMode}`) && navMode === 'code' && projects.size === 0 && <p className="hx-side-empty">还没有项目。点上面的「打开项目」选一个文件夹，她就能在里面建项目、改代码。</p>}
+            {!isFolded(`all:${navMode}`) && navMode === 'code' && projects.size === 0 && <p className="hx-side-empty">点击「创建项目组」，选择工作文件夹即可开始。</p>}
           </div>
         </div>
         {update.ready && (
@@ -370,7 +399,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       </aside>
 
       <main className="content">
-        <ChatView active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} project={navMode === 'code' ? null : projectChip} codeMode={navMode === 'code'} composerTop={codeStrip} projectName={currentProject ? folderName(currentProject) : null} />
+        <ChatView sessionTitle={sessions.find(s => s.id === session?.id)?.title} active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} project={navMode === 'code' ? null : projectChip} codeMode={navMode === 'code'} composerTop={codeStrip} projectName={currentProject ? projectLabel(currentProject) : null} />
         {page === 'schedules' && <SchedulesPage controls={pageControls} />}
         {page === 'skills' && <SkillsPage controls={pageControls} />}
         {page === 'profile' && <ProfilePage controls={pageControls} userAvatar={userAvatar} onAvatar={setUserAvatar} />}
