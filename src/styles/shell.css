@@ -254,3 +254,52 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
 .nav-name-form button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 .nav-name-form button:disabled { opacity: .55; cursor: default; }
 .hx-session:focus-within .hx-session-actions { display: flex; }
+
+/* Settings choices share the character palette, including the expanded native picker. */
+.settings select {
+  min-width: 0; max-width: 100%; min-height: 34px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  color: var(--ink); font: inherit; cursor: pointer;
+}
+.settings .row.pick select { flex: 0 1 260px; }
+.settings select:hover:enabled { border-color: var(--orange); }
+@supports (appearance: base-select) {
+  .settings select, .settings select::picker(select) { appearance: base-select; }
+  .settings select::picker-icon { color: var(--orange); }
+  .settings select::picker(select) {
+    margin-block: 4px; padding: 4px; max-height: min(320px, 55vh); overflow-y: auto;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface); color: var(--ink); font: inherit;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+  }
+  body[data-view="chat"] .settings select option {
+    min-height: 30px; padding: 5px 10px; gap: 8px; border-radius: 6px;
+    background: transparent; color: inherit; cursor: pointer;
+  }
+  body[data-view="chat"] .settings option:checked { color: var(--ink); background: var(--orange-soft); font-weight: 600; }
+  body[data-view="chat"] .settings select option:is(:hover, :focus-visible) { background: var(--chip); }
+  .settings option::checkmark { order: 1; margin-inline-start: auto; color: var(--orange); }
+}
+.settings input[type="checkbox"] {
+  appearance: none; position: relative; vertical-align: middle; flex: none;
+  width: 34px; height: 20px; padding: 0; border: 1px solid color-mix(in srgb, var(--ink) 32%, var(--line));
+  border-radius: 999px; background: var(--surface); cursor: pointer;
+}
+.settings input[type="checkbox"]::before {
+  content: ""; position: absolute; inset-block-start: 3px; inset-inline-start: 3px;
+  width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 65%, var(--surface));
+}
+.settings input[type="checkbox"]:checked { background: var(--orange-soft); border-color: var(--orange); }
+.settings input[type="checkbox"]:checked::before { transform: translateX(14px); background: var(--orange); }
+.settings input[type="checkbox"]:hover:enabled { border-color: var(--orange); }
+.settings :is(select, input[type="checkbox"], input[type="range"]):focus-visible {
+  outline: 2px solid var(--orange); outline-offset: 2px;
+}
+.settings :is(select, option, input[type="checkbox"], input[type="range"]):disabled { opacity: .55; cursor: default; }
+@media (prefers-reduced-motion: no-preference) {
+  .settings input[type="checkbox"]::before { transition: transform 150ms ease-out; }
+}
+@media (forced-colors: active) {
+  .settings input[type="checkbox"] { appearance: auto; width: 18px; height: 18px; }
+  .settings input[type="checkbox"]::before { content: none; }
+}
