@@ -170,7 +170,7 @@ export interface PetAPI {
   updateStatus(): Promise<UpdateStatus>;
   updateApply(): Promise<{ ok: boolean; error?: string }>;
   onUpdate(cb: (s: UpdateStatus) => void): () => void;
-  agentOpenFolder(kind: 'logs' | 'plugins' | 'skills' | 'instructions' | 'hooks'): void;
+  agentOpenFolder(kind: 'logs' | 'plugins' | 'skills' | 'instructions' | 'hooks' | 'project'): void;
   /** A chat slash command; null when the text is not one (send it as a message instead). */
   agentCommand(text: string): Promise<AgentCommandResult | null>;
   onAgentEvent(cb: (e: AgentEvent) => void): () => void;
@@ -209,6 +209,11 @@ export interface PetAPI {
   sessionsList(): Promise<{ current: string; sessions: SessionSummary[] } | { error: string }>;
   sessionOpen(id: string): Promise<{ ok: true; id: string } | { error: string }>;
   sessionNew(): Promise<{ ok: true; id: string } | { error: string }>;
+  sessionPin(id: string, pinned: boolean): Promise<{ ok: true } | { error: string }>;
+  /** Moves the conversation to sessions/trash/; deleting the open one opens the newest other one. */
+  sessionDelete(id: string): Promise<{ ok: true; id: string } | { error: string }>;
+  /** Binds the open conversation (fresh = start a new one first) to a project folder; null unbinds it. */
+  sessionProject(folder: string | null, fresh?: boolean): Promise<{ ok: true; id: string; project: string | null } | { error: string }>;
   trajectory(): Promise<{ id: string; events: TrajectoryEvent[] } | { error: string }>;
   /** Her current face as a small PNG data URL ('' if unavailable). */
   petAvatar(): Promise<string>;

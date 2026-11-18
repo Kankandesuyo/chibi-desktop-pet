@@ -24,6 +24,8 @@ interface Props {
   onWanted(): void;
   /** Title-bar controls drawn by the shell (pin, full screen). */
   controls: JSX.Element;
+  /** The project folder chip (when this conversation works in one). */
+  project?: JSX.Element | null;
 }
 
 /**
@@ -31,7 +33,7 @@ interface Props {
  * permission prompts and the plan; a trajectory tab with the raw event log; a composer with slash
  * commands and the permission mode; run stats and the context-window meter at the bottom.
  */
-export function ChatView({ active, avatar, userAvatar, onWanted, controls }: Props): JSX.Element {
+export function ChatView({ active, avatar, userAvatar, onWanted, controls, project }: Props): JSX.Element {
   const { messages, streaming, requestId, notice, steps, plan, interim, confirms, send, stop, clear, answer, session } = useChatStore();
   const settings = useSettingsStore((s) => s.settings);
   const [text, setText] = useState('');
@@ -133,6 +135,7 @@ export function ChatView({ active, avatar, userAvatar, onWanted, controls }: Pro
       <header className="page-head">
         <span className="page-title" title={title}>{title}</span>
         <span className={`hx-badge b-${mode}`}>{badge}</span>
+        {project}
         <nav className="hx-tabs">
           <button type="button" className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>对话</button>
           <button type="button" className={tab === 'trajectory' ? 'on' : ''} onClick={() => setTab('trajectory')} title="每一次模型请求和工具调用的原始记录">轨迹</button>

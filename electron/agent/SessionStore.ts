@@ -73,10 +73,13 @@ export class SessionStore {
   private pendingResume: TurnRecord | null = null;
   private readonly switchListeners = new Set<() => void>();
   private readonly titleCache = new Map<string, { mtime: number; title: string }>();
+  /** Per-session extras kept beside the logs (sessions/meta.json): pinned, project folder. */
+  private meta: Record<string, SessionMeta> = {};
   id = '';
 
   constructor(readonly dir: string) {
     fs.mkdirSync(dir, { recursive: true });
+    this.meta = readMeta(path.join(dir, 'meta.json'));
     const latest = this.rememberedFile() ?? this.latestFile();
     if (latest && fs.statSync(latest).size < MAX_SESSION_BYTES) this.open(latest);
     else this.newSession();
@@ -208,15 +211,76 @@ export class SessionStore {
       try { mtime = fs.statSync(file).mtimeMs; } catch { continue; }
       let title = this.titleCache.get(id);
       if (!title || title.mtime !== mtime) { title = { mtime, title: firstUserText(file) }; this.titleCache.set(id, title); }
-      out.push({ id, title: title.title, updatedAt: Math.round(mtime), current: id === this.id });
+      const m = this.meta[id];
+      out.push({ id, title: title.title, updatedAt: Math.round(mtime), current: id === this.id, ...(m?.pinned ? { pinned: true } : {}), ...(m?.project ? { project: m.project } : {}) });
     }
     return out.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+  }
+
+  // ---- pin / delete / project folder ----
+  private saveMeta(): void {
+    for (const [k, v] of Object.entries(this.meta)) if (!v.pinned && !v.project) delete this.meta[k];
+    try { fs.writeFileSync(path.join(this.dir, 'meta.json'), JSON.stringify(this.meta, null, 1), 'utf8'); } catch (err) { console.error('[session] meta', err); }
+  }
+
+  private exists(id: string): boolean { return ID_RE.test(id) && fs.existsSync(path.join(this.dir, `${id}.jsonl`)); }
+
+  setPinned(id: string, pinned: boolean): boolean {
+    if (!this.exists(id)) return false;
+    this.meta[id] = { ...this.meta[id], pinned: pinned || undefined };
+    this.saveMeta();
+    return true;
+  }
+
+  /** The project folder the current session works in, if any. */
+  project(): string | null { return this.meta[this.id]?.project ?? null; }
+
+  setProject(folder: string | null, id = this.id): boolean {
+    if (!this.exists(id) && id !== this.id) return false;
+    this.meta[id] = { ...this.meta[id], project: folder || undefined };
+    this.saveMeta();
+    return true;
+  }
+
+  /**
+   * Deletes a saved session: its log goes to sessions/trash/ (not destroyed, in case it was a mistake).
+   * Deleting the open one switches to the newest other session, or a new one.
+   */
+  remove(id: string): boolean {
+    if (!this.exists(id)) return false;
+    const trash = path.join(this.dir, 'trash');
+    fs.mkdirSync(trash, { recursive: true });
+    fs.renameSync(path.join(this.dir, `${id}.jsonl`), path.join(trash, `${id}.jsonl`));
+    delete this.meta[id];
+    this.saveMeta();
+    this.titleCache.delete(id);
+    if (id === this.id) {
+      const next = this.latestFile();
+      if (next) { this.open(next); this.remember(); this.notifySwitch(); } else this.newSession();
+    }
+    return true;
   }
 
   /** Starts a new file when the current one has grown too big (called between turns). */
   rotateIfLarge(): void {
     if (this.info().bytes >= MAX_SESSION_BYTES) this.newSession();
   }
+}
+
+interface SessionMeta { pinned?: boolean; project?: string }
+
+function readMeta(file: string): Record<string, SessionMeta> {
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown;
+    if (!raw || typeof raw !== 'object') return {};
+    const out: Record<string, SessionMeta> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (!ID_RE.test(k) || !v || typeof v !== 'object') continue;
+      const m = v as Record<string, unknown>;
+      out[k] = { ...(m.pinned === true ? { pinned: true } : {}), ...(typeof m.project === 'string' && path.isAbsolute(m.project) ? { project: m.project } : {}) };
+    }
+    return out;
+  } catch { return {}; }
 }
 
 /** Title of a session: its first user message (read from the start of the file only). */

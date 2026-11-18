@@ -158,6 +158,36 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
     return { ok: true, id: st.id };
   }
   function newSession() { if (!sessionsOf()) throw noSessions(); busy(); conversation.clear(); return { ok: true, id: sessionsOf().id }; }
+  const badRequest = msg => Object.assign(new Error(msg), { status: 400 });
+  function pinSession(id, pinned) {
+    const st = sessionsOf(); if (!st) throw noSessions();
+    if (typeof id !== 'string' || !st.setPinned(id, pinned === true)) throw Object.assign(new Error('这个会话不存在'), { status: 404 });
+    changed(); return { ok: true };
+  }
+  function deleteSession(id) {
+    const st = sessionsOf(); if (!st) throw noSessions();
+    if (id === st.id) busy();
+    if (typeof id !== 'string' || !st.remove(id)) throw Object.assign(new Error('这个会话不存在'), { status: 404 });
+    changed(); return { ok: true, id: st.id };
+  }
+  /** Binds the current conversation (a new one if it already has messages) to a project folder, or unbinds it (null). */
+  function setProject(folder, fresh) {
+    const st = sessionsOf(); if (!st) throw noSessions(); busy();
+    if (folder !== null) {
+      if (typeof folder !== 'string' || !path.isAbsolute(folder)) throw badRequest('请选择一个文件夹');
+      folder = path.resolve(folder);
+      let isDir = false; try { isDir = fs.statSync(folder).isDirectory(); } catch { /* missing */ }
+      if (!isDir) throw badRequest('这个文件夹不存在');
+      if (path.parse(folder).root === folder) throw badRequest('不能把整个磁盘当作项目，请选一个具体的文件夹');
+    }
+    if (fresh) conversation.clear();
+    const before = st.project();
+    st.setProject(folder);
+    // Must be a place she may change (not the pet's own data, Windows, Program Files…).
+    const check = folder && agent.permissions?.checkPaths ? agent.permissions.checkPaths({ write: [path.join(folder, '.pet-check')] }) : { ok: true };
+    if (!check.ok) { st.setProject(before); throw badRequest(check.reason); }
+    changed(); return { ok: true, id: st.id, project: st.project() };
+  }
   function trajectory() { const st = sessionsOf(); if (!st) throw noSessions(); return { id: st.id, events: clean(st.events(1500)) }; }
   function command(text) {
     if (typeof text !== 'string' || !text.trim() || text.length > 2000) throw Object.assign(new Error('命令格式不正确'), { status: 400 });
@@ -206,6 +236,9 @@ function startRemoteChat({ config, agent, windows, life, app, streamChat, notify
     handle('chat:session-open', openSession);
     handle('chat:session-new', newSession);
     handle('chat:trajectory', trajectory);
+    handle('chat:session-pin', pinSession);
+    handle('chat:session-delete', deleteSession);
+    handle('chat:session-project', setProject);
   }
   // Local CLI entry points also make the transparent pet usable without a
   // precision right-click on a moving sprite.

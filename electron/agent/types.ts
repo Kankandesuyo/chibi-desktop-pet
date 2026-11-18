@@ -99,6 +99,8 @@ export interface ToolContext {
   signal: AbortSignal;
   /** Absolute, normalised paths resolved by the permission layer. */
   resolvePath(p: string): string;
+  /** The conversation's project folder (relative paths and commands default to it), if one is open. */
+  project?: string | null;
   services: AgentServices;
   log(event: string, data: Record<string, unknown>): void;
   /** Present when tool groups are shown on demand (load_tools). */

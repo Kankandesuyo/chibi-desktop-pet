@@ -1,7 +1,7 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { defineTool, type AnyTool } from '../types';
+import { defineTool, type AnyTool, type ToolContext } from '../types';
 
 const IS_WIN = process.platform === 'win32';
 const MAX_BUFFER = 64 * 1024;
@@ -69,6 +69,13 @@ export class ProcessManager {
   stopAll(): void { for (const m of this.procs.values()) killTree(m.child); }
 }
 
+/** Working folder: the given one, else the conversation's project folder. */
+const cwdOf = (a: { cwd?: string }, ctx: ToolContext): string => {
+  if (a.cwd?.trim()) return ctx.resolvePath(a.cwd);
+  if (ctx.project) return ctx.project;
+  throw new Error('请给出 cwd（工作目录）');
+};
+
 const tail = (s: string, n: number): string => (s.length > n ? `…${s.slice(-n)}` : s);
 
 const projectTree = defineTool<{ path: string; depth?: number; maxEntries?: number }>({
@@ -119,19 +126,19 @@ const gitStatus = defineTool<{ path: string }>({
   },
 });
 
-const runCommand = defineTool<{ command: string; cwd: string; timeoutSec?: number }>({
+const runCommand = defineTool<{ command: string; cwd?: string; timeoutSec?: number }>({
   name: 'run_command', group: 'dev', riskLevel: 'high', requiresConfirmation: true,
   description: '在指定工作目录里运行一条命令（如 npm test、npm run build、pytest），等待结束并返回输出。每次都需要用户确认完整命令。长期运行的服务请用 start_dev_server。',
   inputSchema: { type: 'object', properties: {
     command: { type: 'string', minLength: 1, maxLength: 1000 },
-    cwd: { type: 'string', description: '工作目录（必须在允许的文件夹里）' },
+    cwd: { type: 'string', description: '工作目录（必须在允许的文件夹里；有项目文件夹时可以不写，默认就在项目里）' },
     timeoutSec: { type: 'integer', minimum: 5, maximum: 600, description: '超时秒数，默认 120' },
-  }, required: ['command', 'cwd'] },
+  }, required: ['command'] },
   title: (a) => `运行命令：${a.command}`,
-  paths: (a, ctx) => ({ write: [ctx.resolvePath(a.cwd)] }),
-  assess: (a, ctx) => ({ risk: 'high', reason: '会在你的电脑上执行命令', preview: [`命令：${a.command}`, `工作目录：${ctx.resolvePath(a.cwd)}`, `超时：${a.timeoutSec ?? 120} 秒`] }),
+  paths: (a, ctx) => ({ write: [cwdOf(a, ctx)] }),
+  assess: (a, ctx) => ({ risk: 'high', reason: '会在你的电脑上执行命令', preview: [`命令：${a.command}`, `工作目录：${cwdOf(a, ctx)}`, `超时：${a.timeoutSec ?? 120} 秒`] }),
   execute: async (a, ctx) => {
-    const cwd = ctx.resolvePath(a.cwd);
+    const cwd = cwdOf(a, ctx);
     if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) return { ok: false, summary: '工作目录不存在', error: `${cwd} 不存在` };
     const r = await ctx.services.processes.run(a.command, cwd, (a.timeoutSec ?? 120) * 1000, ctx.signal);
     const ok = r.exitCode === 0 && !r.timedOut;
@@ -143,15 +150,15 @@ const runCommand = defineTool<{ command: string; cwd: string; timeoutSec?: numbe
   },
 });
 
-const startDevServer = defineTool<{ command: string; cwd: string; name?: string }>({
+const startDevServer = defineTool<{ command: string; cwd?: string; name?: string }>({
   name: 'start_dev_server', group: 'dev', riskLevel: 'high', requiresConfirmation: true,
   description: '在后台启动长期运行的命令（如 uvicorn main:app --reload、npm run dev），返回 id。用 read_process_output 看输出，用 stop_dev_server 停止。每次都需要确认。',
-  inputSchema: { type: 'object', properties: { command: { type: 'string', minLength: 1, maxLength: 1000 }, cwd: { type: 'string' }, name: { type: 'string', maxLength: 60 } }, required: ['command', 'cwd'] },
+  inputSchema: { type: 'object', properties: { command: { type: 'string', minLength: 1, maxLength: 1000 }, cwd: { type: 'string', description: '有项目文件夹时可以不写' }, name: { type: 'string', maxLength: 60 } }, required: ['command'] },
   title: (a) => `后台启动：${a.command}`,
-  paths: (a, ctx) => ({ write: [ctx.resolvePath(a.cwd)] }),
-  assess: (a, ctx) => ({ risk: 'high', reason: '会在后台持续运行一个命令', preview: [`命令：${a.command}`, `工作目录：${ctx.resolvePath(a.cwd)}`] }),
+  paths: (a, ctx) => ({ write: [cwdOf(a, ctx)] }),
+  assess: (a, ctx) => ({ risk: 'high', reason: '会在后台持续运行一个命令', preview: [`命令：${a.command}`, `工作目录：${cwdOf(a, ctx)}`] }),
   execute: async (a, ctx) => {
-    const cwd = ctx.resolvePath(a.cwd);
+    const cwd = cwdOf(a, ctx);
     if (!fs.existsSync(cwd)) return { ok: false, summary: '工作目录不存在', error: `${cwd} 不存在` };
     const m = ctx.services.processes.start(a.name ?? a.command.slice(0, 40), a.command, cwd);
     return { ok: true, summary: `已在后台启动（id ${m.id}）`, data: { id: m.id, pid: m.child.pid } };

@@ -20,6 +20,9 @@ export interface SessionSummary {
   /** Last change, ms since epoch. */
   updatedAt: number;
   current: boolean;
+  pinned?: boolean;
+  /** The project folder this conversation works in. */
+  project?: string;
 }
 
 /** Totals over the current session, as shown in the stats bar. */

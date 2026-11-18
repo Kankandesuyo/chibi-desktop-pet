@@ -48,6 +48,16 @@ body[data-view="chat"] select option { background: var(--surface); color: var(--
 .nav-brand { display: flex; align-items: center; gap: 9px; height: 52px; padding: 10px 14px 0; -webkit-app-region: drag; }
 .nav-brand-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; font-size: 15px; }
 .nav-busy { color: var(--orange); font-size: 10px; animation: hx-blink 1s infinite; }
+.nav-new-row { display: flex; gap: 6px; margin: 10px 12px 6px; }
+.nav-new-row .nav-new { margin: 0; }
+.nav-new-row .nav-new:first-child { flex: 1; }
+.nav-project { flex: none; color: inherit; border-color: var(--line); font-weight: 600; }
+.project-chip { display: inline-flex; align-items: center; gap: 1px; min-width: 0; max-width: 260px; padding: 1px 2px 1px 4px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
+.project-chip button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; border-radius: 999px; }
+.project-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; font-weight: 600; }
+.project-chip-btn { flex: none; padding: 2px 7px; opacity: 0.55; }
+.project-chip button:hover:not(:disabled) { background: var(--chip); opacity: 1; }
+.project-chip button:disabled { opacity: 0.3; cursor: default; }
 .nav-new { margin: 10px 12px 6px; padding: 8px 12px; border: 1px solid rgba(var(--accent-rgb), 0.5); border-radius: 10px; background: var(--surface); color: var(--orange); font-weight: 700; text-align: left; }
 .nav-new:hover:not(:disabled) { background: var(--orange-soft); }
 .nav-new:disabled { opacity: 0.5; cursor: default; }

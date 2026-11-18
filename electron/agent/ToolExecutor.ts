@@ -77,6 +77,7 @@ export class ToolExecutor {
     const ctx: ToolContext = {
       taskId: rt.taskId, platform: this.platform, signal: rt.signal, services: this.services,
       resolvePath: (p) => this.permissions.resolvePath(p, this.platform.knownFolders().home),
+      project: this.permissions.project?.() ?? null,  // (optional: test doubles may not have it)
       log: (event, data) => this.logger.log(rt.taskId, event, { tool: tool.name, ...data }),
       ...(rt.toolLoader ? { toolLoader: rt.toolLoader } : {}),
     };
@@ -107,6 +108,7 @@ export class ToolExecutor {
       taskId: rt.taskId, tool: tool.name, title, baseRisk: tool.riskLevel, assessed: assessment.risk,
       alwaysConfirm: tool.requiresConfirmation, reason: assessment.reason,
       preview: assessment.preview ?? previewArgs(args), tainted: rt.tainted, signal: rt.signal, args,
+      inProject: !systemZone && (this.permissions.insideProject?.(access) ?? false),
     });
     this.logger.log(rt.taskId, 'permission', { tool: tool.name, args, risk, allowed: auth.allowed, how: auth.allowed ? auth.how : auth.reason });
     if (!auth.allowed) return fail('denied', auth.reason, risk, title);

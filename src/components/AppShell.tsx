@@ -96,6 +96,27 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     if (id === session?.id) return;
     void window.petAPI.sessionOpen(id).then((r) => { if ('error' in r) useChatStore.setState({ notice: r.error }); refreshSessions(); });
   };
+  const report = (r: { error: string } | object): boolean => {
+    if ('error' in r) { useChatStore.setState({ notice: (r as { error: string }).error }); return false; }
+    return true;
+  };
+  /** Picks a folder and opens a new conversation that works in it (fresh) — or rebinds the open one. */
+  const chooseProject = async (fresh: boolean): Promise<void> => {
+    if (useChatStore.getState().requestId) { useChatStore.setState({ notice: '她正在做事，做完再换项目' }); return; }
+    const folder = await window.petAPI.agentPickFolder();
+    if (!folder) return;
+    setPage('chat');
+    report(await window.petAPI.sessionProject(folder, fresh));
+    refreshSessions();
+  };
+  const unbindProject = async (): Promise<void> => { report(await window.petAPI.sessionProject(null)); refreshSessions(); };
+  const togglePin = async (s: SessionSummary): Promise<void> => { report(await window.petAPI.sessionPin(s.id, !s.pinned)); refreshSessions(); };
+  const removeSession = async (s: SessionSummary): Promise<void> => {
+    if (!window.confirm(`删除会话「${s.title}」？\n\n它会被移到智能体数据里的 sessions\\trash 文件夹，需要时还能找回。`)) return;
+    report(await window.petAPI.sessionDelete(s.id));
+    refreshSessions();
+  };
+
   function newSession(): void {
     setPage('chat');
     if (useChatStore.getState().requestId) return;
@@ -104,7 +125,18 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   }
 
   const groups = new Map<string, SessionSummary[]>();
-  for (const s of sessions) groups.set(dayGroup(s.updatedAt), [...(groups.get(dayGroup(s.updatedAt)) ?? []), s]);
+  const pinned = sessions.filter((s) => s.pinned);
+  if (pinned.length) groups.set('📌 置顶', pinned);
+  for (const s of sessions) if (!s.pinned) groups.set(dayGroup(s.updatedAt), [...(groups.get(dayGroup(s.updatedAt)) ?? []), s]);
+  const currentProject = sessions.find((s) => s.current)?.project ?? null;
+  const folderName = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+  const projectChip = currentProject ? (
+    <span className="project-chip" title={currentProject}>
+      <button type="button" className="project-chip-name" onClick={() => window.petAPI.agentOpenFolder('project')} title={`${currentProject}\n点一下在资源管理器里打开`}>📁 {folderName(currentProject)}</button>
+      <button type="button" className="project-chip-btn" onClick={() => void chooseProject(false)} disabled={busy} title="换一个项目文件夹">换</button>
+      <button type="button" className="project-chip-btn" onClick={() => void unbindProject()} disabled={busy} title="这个对话不再绑定项目文件夹">✕</button>
+    </span>
+  ) : null;
   const uiMode = settings.uiMode;
   const p = settings.profile;
   const me = p.displayName || p.callMe || '我';
@@ -136,23 +168,38 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
           <span className="nav-brand-name">{name}</span>
           {busy && <span className="nav-busy" title="她正在做事">●</span>}
         </div>
-        <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? '她正在做事，做完再开新会话' : '开始新会话（Ctrl+N，/new）'}>＋ 新会话</button>
+        <div className="nav-new-row">
+          <button type="button" className="nav-new" onClick={newSession} disabled={busy} title={busy ? '她正在做事，做完再开新会话' : '开始新会话（Ctrl+N，/new）'}>＋ 新会话</button>
+          <button type="button" className="nav-new nav-project" onClick={() => void chooseProject(true)} disabled={busy} title="选一个文件夹，开一个在里面建项目、改代码的对话（像 Codex / Claude Code）">📁 项目</button>
+        </div>
         <div className="nav-group nav-main">
           {nav('chat', '💬', '会话')}
           <div className="nav-sessions">
             {[...groups].map(([label, list]) => (
               <section key={label}>
                 <h4>{label}</h4>
-                {list.map((s) => (
-                  <button
-                    key={s.id} type="button" className={`hx-session${s.id === session?.id ? ' current' : ''}`}
-                    onClick={() => openSession(s.id)} disabled={busy && s.id !== session?.id}
-                    title={`${s.title}\n${s.id}`}
-                  >
-                    <span className="hx-session-title">{s.title}</span>
-                    <span className="hx-session-time">{shortDate(s.updatedAt)}</span>
-                  </button>
-                ))}
+                {list.map((s) => {
+                  const locked = busy && s.id !== session?.id;
+                  return (
+                    <div
+                      key={s.id} role="button" tabIndex={0} aria-disabled={locked}
+                      className={`hx-session${s.id === session?.id ? ' current' : ''}${locked ? ' locked' : ''}`}
+                      onClick={() => { if (!locked) openSession(s.id); }}
+                      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); openSession(s.id); } }}
+                      title={`${s.title}${s.project ? `\n📁 ${s.project}` : ''}`}
+                    >
+                      <span className="hx-session-main">
+                        <span className="hx-session-title">{s.title}</span>
+                        {s.project && <span className="hx-session-project">📁 {folderName(s.project)}</span>}
+                      </span>
+                      <span className="hx-session-time">{shortDate(s.updatedAt)}</span>
+                      <span className="hx-session-actions">
+                        <button type="button" className={s.pinned ? 'on' : ''} title={s.pinned ? '取消置顶' : '置顶'} onClick={(e) => { e.stopPropagation(); void togglePin(s); }}>📌</button>
+                        <button type="button" title="删除这个会话" disabled={busy && s.id === session?.id} onClick={(e) => { e.stopPropagation(); void removeSession(s); }}>🗑</button>
+                      </span>
+                    </div>
+                  );
+                })}
               </section>
             ))}
             {sessions.length === 0 && <p className="hx-side-empty">还没有会话</p>}
@@ -185,7 +232,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       </aside>
 
       <main className="content">
-        <ChatView active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} />
+        <ChatView active={page === 'chat'} avatar={avatar} userAvatar={userAvatar} onWanted={() => setPage('chat')} controls={controls} project={projectChip} />
         {page === 'schedules' && <SchedulesPage controls={pageControls} />}
         {page === 'skills' && <SkillsPage controls={pageControls} />}
         {page === 'profile' && <ProfilePage controls={pageControls} userAvatar={userAvatar} onAvatar={setUserAvatar} />}

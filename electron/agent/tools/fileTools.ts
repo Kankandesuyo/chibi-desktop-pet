@@ -59,6 +59,13 @@ function countItems(dir: string, limit = 5000): number {
 
 const p = (ctx: ToolContext, s: string): string => ctx.resolvePath(s);
 
+/** Inside (not equal to) the conversation's project folder. */
+const inProject = (ctx: ToolContext, file: string): boolean => {
+  if (!ctx.project) return false;
+  const rel = path.relative(ctx.project.toLowerCase(), file.toLowerCase());
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+};
+
 // ---------------------------------------------------------------------------------------------
 
 const listDirectory = defineTool<{ path: string; includeHidden?: boolean; limit?: number }>({
@@ -228,6 +235,8 @@ const writeFile = defineTool<{ path: string; content: string; mode?: 'overwrite'
   assess: (a, ctx) => {
     const file = p(ctx, a.path);
     if (exists(file) && (a.mode ?? 'overwrite') === 'overwrite') {
+      // In the project folder rewriting a file is ordinary work (it is backed up and can be undone).
+      if (inProject(ctx, file)) return { risk: 'medium', preview: [`重写项目文件：${file}`, `新内容：${a.content.length} 字符`, a.content.slice(0, 200)] };
       return { risk: 'high', reason: '会覆盖已有文件的全部内容（会先自动备份）', preview: [`覆盖：${file}（原大小 ${fmtSize(fs.statSync(file).size)}）`, `新内容：${a.content.length} 字符`, a.content.slice(0, 200)] };
     }
     return { risk: 'medium', preview: [`${exists(file) ? '追加到' : '新建'}：${file}`, a.content.slice(0, 200)] };
@@ -253,6 +262,47 @@ const writeFile = defineTool<{ path: string; content: string; mode?: 'overwrite'
     const content = fs.readFileSync(p(ctx, a.path), 'utf8');
     const ok = (a.mode ?? 'overwrite') === 'append' ? content.endsWith(a.content) : content === a.content;
     return { verified: ok, detail: ok ? '内容已写入' : '读回的内容和预期不一致' };
+  },
+});
+
+const editFile = defineTool<{ path: string; old_text: string; new_text: string; replace_all?: boolean }>({
+  name: 'edit_file', group: 'files', riskLevel: 'medium', requiresConfirmation: false,
+  description: '修改已有文本文件的一部分：把 old_text 精确替换成 new_text（改代码首选，比整个重写 write_file 安全）。old_text 必须和文件里的内容一字不差（含缩进和换行），并且只出现一次（或设 replace_all=true 全部替换）。修改前先用 read_file 读过文件。会先备份，可以撤销。',
+  inputSchema: { type: 'object', properties: {
+    path: { type: 'string', description: '文件路径（在项目里可以写相对路径）' },
+    old_text: { type: 'string', minLength: 1, maxLength: 100_000, description: '要被替换的原文（一字不差）' },
+    new_text: { type: 'string', maxLength: 200_000, description: '替换成的新内容（可以为空字符串，表示删掉这段）' },
+    replace_all: { type: 'boolean', description: '替换所有出现的地方，默认 false' },
+  }, required: ['path', 'old_text', 'new_text'] },
+  title: (a) => `修改 ${a.path}`,
+  paths: (a, ctx) => ({ write: [p(ctx, a.path)] }),
+  assess: (a, ctx) => {
+    const file = p(ctx, a.path);
+    const preview = [`修改：${file}`, `- ${a.old_text.slice(0, 160)}`, `+ ${a.new_text.slice(0, 160)}`];
+    return inProject(ctx, file) ? { risk: 'medium', preview } : { risk: 'high', reason: '会修改一个已有文件（会先自动备份）', preview };
+  },
+  execute: async (a, ctx) => {
+    const file = p(ctx, a.path);
+    if (!exists(file) || isDir(file)) return { ok: false, summary: '文件不存在', error: `${file} 不存在或是文件夹；新文件请用 create_file` };
+    const text = fs.readFileSync(file, 'utf8');
+    // Files saved on Windows often use CRLF while the model writes LF: match either way, keep the file's own style.
+    const crlf = text.includes('\r\n');
+    const toFile = (s: string): string => (crlf ? s.replace(/\r?\n/g, '\r\n') : s);
+    const oldText = toFile(a.old_text);
+    const count = text.split(oldText).length - 1;
+    if (count === 0) return { ok: false, summary: '没找到要替换的原文', error: 'old_text 在文件里找不到（要一字不差，包括缩进）。先用 read_file 重新读一下这个文件' };
+    if (count > 1 && !a.replace_all) return { ok: false, summary: `原文出现了 ${count} 次`, error: `old_text 出现了 ${count} 次：多带几行上下文让它唯一，或设 replace_all=true` };
+    const next = a.replace_all ? text.split(oldText).join(toFile(a.new_text)) : text.replace(oldText, () => toFile(a.new_text));
+    ctx.services.journal.record(ctx.taskId, 'edit_file', [{ kind: 'overwrite', path: file, backup: ctx.services.journal.backup(file) }]);
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, next, 'utf8');
+    fs.renameSync(tmp, file);
+    return { ok: true, summary: `已修改 ${file}（替换了 ${a.replace_all ? count : 1} 处）`, data: { path: file, replaced: a.replace_all ? count : 1 } };
+  },
+  verify: async (a, _r, ctx) => {
+    const text = fs.readFileSync(p(ctx, a.path), 'utf8').replace(/\r\n/g, '\n');
+    const ok = a.new_text === '' || text.includes(a.new_text.replace(/\r\n/g, '\n'));
+    return { verified: ok, detail: ok ? '新内容已在文件里' : '读回的文件里找不到新内容' };
   },
 });
 
@@ -504,4 +554,4 @@ function selector(a: { scope?: string; entryId?: string }, ctx: ToolContext): { 
 /** Exposed for the self-check tool and tests. */
 export const fileHelpers = { freeName, destinationFor, waitFor: TaskVerifier.waitFor };
 
-export const fileTools: AnyTool[] = [listDirectory, searchFiles, createDirectory, createFile, readFile, writeFile, moveFile, moveFiles, copyFile, renameFile, deleteFile, getFileInfo, createShortcut, undoFileOps];
+export const fileTools: AnyTool[] = [listDirectory, searchFiles, createDirectory, createFile, readFile, writeFile, editFile, moveFile, moveFiles, copyFile, renameFile, deleteFile, getFileInfo, createShortcut, undoFileOps];

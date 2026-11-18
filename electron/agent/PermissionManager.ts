@@ -14,6 +14,11 @@ export interface PermissionPolicy {
   autoApproveMedium: boolean;
   /** The user's allow rule matching this call, if any (medium risk only; see permissionRules.ts). */
   allowRule?(tool: string, args: unknown): string | null;
+  /**
+   * The project folder of the current conversation (like Codex / Claude Code's workspace): relative paths
+   * resolve there, and medium-risk changes that stay inside it run without asking (high risk still asks).
+   */
+  project?(): string | null;
   /** Nobody can answer for this task (scheduled run): anything that would ask is skipped instead. */
   isUnattended?(taskId: string): boolean;
 }
@@ -34,10 +39,12 @@ export interface AuthorizeInput {
   signal: AbortSignal;
   /** The call's arguments (for the user's allow rules). */
   args?: unknown;
+  /** Every path it writes or removes is inside the project folder (see PermissionPolicy.project). */
+  inProject?: boolean;
 }
 
 export type AuthorizeResult =
-  | { allowed: true; risk: RiskLevel; how: 'auto' | 'confirmed' | 'task-grant' | 'rule'; rule?: string }
+  | { allowed: true; risk: RiskLevel; how: 'auto' | 'confirmed' | 'task-grant' | 'rule' | 'project'; rule?: string }
   | { allowed: false; risk: RiskLevel; reason: string };
 
 const ORDER: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
@@ -87,7 +94,19 @@ export class PermissionManager {
     let s = p.trim().replace(/^["']|["']$/g, '');
     s = s.replace(/%([A-Za-z_]+)%/g, (_m, name: string) => process.env[name] ?? `%${name}%`);
     if (s === '~' || s.startsWith('~/') || s.startsWith('~\\')) s = path.join(home, s.slice(1));
-    return path.resolve(home, s);
+    return path.resolve(this.policy().project?.() ?? home, s);
+  }
+
+  /** The open conversation's project folder, if any. */
+  project(): string | null { return this.policy().project?.() ?? null; }
+
+  /** The project folder, if the paths written or removed (at least one) all lie inside it. */
+  insideProject(access: PathAccess | undefined): boolean {
+    const project = this.policy().project?.();
+    if (!project || !access) return false;
+    const changed = [...(access.write ?? []), ...(access.remove ?? [])];
+    const root = realResolve(project);
+    return changed.length > 0 && changed.every((p) => isInside(realResolve(p), root) && norm(realResolve(p)) !== norm(root));
   }
 
   checkPaths(access: PathAccess): { ok: true; systemZone: string | null } | { ok: false; reason: string } {
@@ -121,6 +140,9 @@ export class PermissionManager {
       const rule = this.policy().allowRule?.(input.tool, input.args) ?? null;
       if (rule) return { allowed: true, risk, how: 'rule', rule };
     }
+    // Inside the project folder she edits freely (like a coding agent's workspace); every change is journalled
+    // and can be undone. Deleting and running commands are high risk and still ask every time.
+    if (!needConfirm && risk === 'medium' && input.inProject) return { allowed: true, risk, how: 'project' };
     if (!needConfirm && risk === 'medium') {
       const auto = this.policy().autoApproveMedium && !input.tainted;
       needConfirm = !auto && !grants?.has(input.tool);

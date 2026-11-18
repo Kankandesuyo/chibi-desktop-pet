@@ -1,10 +1,19 @@
 /* Chat window, harness layout: sessions | conversation · trajectory | composer | stats.
    Colours come from the character theme variables in app.css (--orange = her main colour). */
 .hx code, .hx pre, .app code, .app pre { font-family: "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace; }
-.hx-session { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: none; text-align: left; }
-.hx-session:hover:not(:disabled) { background: rgba(var(--accent-rgb), 0.08); }
+.hx-session { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: none; text-align: left; cursor: pointer; outline: none; }
+.hx-session:hover:not(.locked), .hx-session:focus-visible { background: rgba(var(--accent-rgb), 0.08); }
 .hx-session.current { background: rgba(var(--accent-rgb), 0.15); font-weight: 600; }
-.hx-session:disabled { opacity: 0.45; cursor: default; }
+.hx-session.locked { opacity: 0.45; cursor: default; }
+.hx-session-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hx-session-project { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 400; opacity: 0.6; }
+.hx-session-actions { display: none; flex: none; gap: 2px; }
+.hx-session:hover .hx-session-actions, .hx-session:focus-within .hx-session-actions { display: inline-flex; }
+.hx-session:hover .hx-session-time, .hx-session:focus-within .hx-session-time { display: none; }
+.hx-session-actions button { width: 24px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: none; font-size: 12px; opacity: 0.55; filter: grayscale(1); cursor: pointer; }
+.hx-session-actions button:hover:not(:disabled) { background: var(--chip); opacity: 1; filter: none; }
+.hx-session-actions button.on { opacity: 1; filter: none; }
+.hx-session-actions button:disabled { opacity: 0.25; cursor: default; }
 .hx-session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hx-session-time { flex: none; font-size: 11px; opacity: 0.5; }
 .hx-side-empty { margin: 12px; font-size: 12px; opacity: 0.6; }

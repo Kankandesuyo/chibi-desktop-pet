@@ -69,6 +69,24 @@ export interface AgentRuntimeOptions {
 export type AgentRuntime = ReturnType<typeof createAgentRuntime>;
 
 /** Wires every agent module together. Used by the Electron main process and by the tests. */
+/** What she is told when the conversation has a project folder. */
+export function projectPromptBlock(project: string): string {
+  const has = (f: string): boolean => fs.existsSync(path.join(project, f));
+  const notes = ['AGENTS.md', 'CLAUDE.md', 'README.md', 'package.json', 'pyproject.toml', 'requirements.txt', 'Cargo.toml', 'go.mod'].filter(has);
+  const empty = (() => { try { return fs.readdirSync(project).length === 0; } catch { return false; } })();
+  return [
+    '## 当前项目',
+    `这次对话绑定了一个项目文件夹：${project}${empty ? '（目前是空的，可以从零开始建项目）' : ''}`,
+    ...(notes.length ? [`根目录里有：${notes.join('、')}（先读 AGENTS.md / CLAUDE.md / README 了解约定）`] : []),
+    '- 默认就在这个文件夹里工作：相对路径（例如 src/app.ts）都从这里算起；run_command / start_dev_server 不写 cwd 时就在这里运行。',
+    '- 动手前先了解：用 project_tree 看结构，用 read_file 读相关文件，有 git 时用 git_status 看改动。不确定的先查，不要凭空猜文件内容。',
+    '- 改已有文件用 edit_file（精确替换一段原文，先读再改）；新文件用 create_file；只有整个重写时才用 write_file。一次改一处，改完再继续。',
+    '- 在这个文件夹里新建和修改文件不需要逐个确认（都会备份，用户可以撤销）；删除文件、运行命令仍然每次请用户确认。',
+    '- 改完能验证就验证（运行测试、构建或直接运行），失败就看输出继续修；最后简要汇报改了哪些文件、怎么运行、还有什么没做。',
+    '- 不要改项目文件夹以外的东西，除非用户这次明确要求。',
+  ].join('\n');
+}
+
 export function createAgentRuntime(o: AgentRuntimeOptions) {
   fs.mkdirSync(o.baseDir, { recursive: true });
   const redactor = new Redactor();
@@ -80,11 +98,18 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   for (const t of builtins) if (CONCURRENCY_SAFE.has(t.name)) t.concurrencySafe = true;
   registry.registerAll(builtins);
 
+  // The open conversation's project folder (only while it still exists).
+  let sessionsRef: SessionStore | null = null;
+  const currentProject = (): string | null => {
+    const p = sessionsRef?.project() ?? null;
+    return p && path.isAbsolute(p) && fs.existsSync(p) ? p : null;
+  };
   const allowedRoots = (): string[] => {
     const f = o.platform.knownFolders();
-    if (o.settings().fullDiskAccess) return o.platform.drives();
+    if (o.settings().fullDiskAccess) return [...new Set([...o.platform.drives(), ...(currentProject() ? [currentProject() as string] : [])])];
     const extra = o.settings().allowedRoots.filter((r) => path.isAbsolute(r) && fs.existsSync(r));
-    return [...new Set([f.desktop, f.documents, f.downloads, f.pictures, f.music, f.videos, ...extra])];
+    const project = currentProject();
+    return [...new Set([f.desktop, f.documents, f.downloads, f.pictures, f.music, f.videos, ...extra, ...(project ? [project] : [])])];
   };
   // The pet's own data (permissions, approvals, audit log) and install folder are never writable by the agent,
   // whatever the settings — otherwise it could grant itself permissions.
@@ -100,6 +125,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
       allowedRoots: allowedRoots(), protectedRoots: protectedRoots(), systemZones: systemZones(), autoApproveMedium: o.settings().autoApproveMedium,
       allowRule: (tool, args) => firstMatch(o.settings().permissionRules?.allow ?? [], tool, args),
       isUnattended: (taskId) => controller?.isUnattended(taskId) ?? false,
+      project: currentProject,
     }),
     (req, signal) => (controller ? controller.confirm(req, signal) : Promise.resolve('deny')),
   );
@@ -116,6 +142,7 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   const redact = (s: string): string => redactor.text(s);
   const hooks = new TurnHooks();
   const sessions = new SessionStore(path.join(o.baseDir, 'sessions'));
+  sessionsRef = sessions;
   const recaps = new TaskRecaps();
   replayRecaps(recaps, sessions);
   controller = new AgentController({
@@ -129,6 +156,11 @@ export function createAgentRuntime(o: AgentRuntimeOptions) {
   recapPlugin(hooks, recaps, sessions);
   compactionPlugin(hooks, () => ctl.compactOptions, logger, sessions);
   readOnlyPlugin(hooks, registry, () => o.settings().readOnly === true);
+  // Project mode: the conversation is bound to a folder she builds and edits in (like Codex / Claude Code).
+  hooks.on('turn/start', 'project', (ctx) => {
+    const project = currentProject();
+    if (project) ctx.systemSections.push(projectPromptBlock(project));
+  });
   // Phase 3: skills, instruction files, permission rules, the user's own hooks.
   const instructionsFile = path.join(o.baseDir, 'AGENTS.md');
   const userHooks = new UserHooks(o.baseDir, o.approvals, (event, data) => logger.log('hooks', event, data));

@@ -152,6 +152,7 @@ export function registerAgentHandlers(config: ConfigStore, windows: WindowManage
       return;
     }
     if (kind === 'hooks') { agent.userHooks.ensureTemplate(); void shell.openPath(agent.userHooks.file); return; }
+    if (kind === 'project') { const p = agent.sessions.project(); if (p && fs.existsSync(p)) void shell.openPath(p); return; }
     if (kind === 'skills') { fs.mkdirSync(agent.skills.userDir, { recursive: true }); void shell.openPath(agent.skills.userDir); return; }
     const dir = kind === 'plugins' ? agent.plugins.pluginDir : agent.logger.logDir;
     void shell.openPath(dir);
