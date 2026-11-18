@@ -20,6 +20,7 @@ import { Monologue } from './monologue';
 import { SelfModel } from './selfModel';
 import { openClaudeDesktop, registerIpcHandlers, type PetLife } from './ipcHandlers';
 import { WindowManager } from './windowManager';
+import { registerUpdater, updateStatus } from './updater';
 
 // Serve the built renderer from app://local/ instead of file:// so that fetch, canvas pixel reads
 // (used for per-pixel hit testing) and a strict Content-Security-Policy all work.
@@ -28,6 +29,8 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let tray: Tray | null = null;
+let rebuildTray: () => void = () => undefined;
+let installUpdate: () => void = () => undefined;
 let quitting = false;
 
 function registerAppProtocol(characters: CustomCharacters): void {
@@ -79,10 +82,12 @@ function createTray(windows: WindowManager, quit: () => void, character: Charact
       { label: '聊天', click: () => windows.openPanel('chat') },
       { label: '打开 Claude 桌面版', click: () => { void openClaudeDesktop(); } },
       { label: '设置…', click: () => windows.openPanel('settings') },
+      ...(updateStatus().ready ? [{ label: '⬆ 安装新版本并重启', click: () => installUpdate() }] : []),
       { type: 'separator' },
       { label: '退出程序', click: quit },
     ]));
   };
+  rebuildTray = rebuild;
   rebuild();
   tray.on('click', () => { windows.setPetVisible(true); rebuild(); });
   tray.on('right-click', rebuild);
@@ -182,6 +187,7 @@ if (!app.requestSingleInstanceLock()) {
     windows.applyUiMode();
     windows.createPetWindow();
     createTray(windows, quit, config.getSettings().character);
+    installUpdate = registerUpdater((ch, p) => windows.broadcast(ch, p), quit, () => rebuildTray());
     // The chat window shows her face next to her replies (it follows the chosen character).
     ipcMain.handle('pet:avatar', (e) => {
       if (!windows.allWebContentsIds().includes(e.sender.id)) return '';

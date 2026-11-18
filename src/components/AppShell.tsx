@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import type { SessionSummary } from '../../shared/harness';
-import type { PanelAction, PanelState, UiMode } from '../../shared/types';
+import type { PanelAction, PanelState, UiMode, UpdateStatus } from '../../shared/types';
 import { useChatStore } from '../store/chatStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { ChatView } from './ChatView';
@@ -26,6 +26,8 @@ const UI_ICON: Record<UiMode, string> = { system: '◐', light: '☀', dark: '�
 export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   const [page, setPage] = useState<Page>(initialPage);
   const [menu, setMenu] = useState(false);
+  const [update, setUpdate] = useState<UpdateStatus>({ ready: false });
+  const [installing, setInstalling] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(page);
   pageRef.current = page;
@@ -46,6 +48,8 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
   useEffect(() => {
     const offNav = window.petAPI.onNavigate((p) => { if (isPage(p)) setPage(p); });
     const offPanel = window.petAPI.onPanelState(setPanel);
+    const offUpdate = window.petAPI.onUpdate(setUpdate);
+    void window.petAPI.updateStatus().then(setUpdate);
     const offSettings = window.petAPI.onSettings((s) => {
       const prev = useSettingsStore.getState().settings;
       useSettingsStore.getState().apply(s);
@@ -65,7 +69,7 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
       if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); newSession(); }
     };
     window.addEventListener('keydown', onKey);
-    return () => { offNav(); offPanel(); offSettings(); window.removeEventListener('keydown', onKey); };
+    return () => { offNav(); offPanel(); offUpdate(); offSettings(); window.removeEventListener('keydown', onKey); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -77,6 +81,11 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
     return () => window.removeEventListener('mousedown', off);
   }, [menu]);
   const go = (p: Page): void => { setMenu(false); setPage(p); };
+  const installUpdate = (): void => {
+    if (useChatStore.getState().requestId && !window.confirm('她正在做事，现在更新会打断她。仍然更新并重启吗？')) return;
+    setInstalling(true);
+    void window.petAPI.updateApply().then((r) => { if (!r.ok) { setInstalling(false); useChatStore.setState({ notice: `更新失败：${r.error ?? '未知原因'}` }); } });
+  };
 
   // The list changes when the session changes, and a new session gets its title from its first message.
   const firstUser = messages.find((m) => m.role === 'user')?.content ?? '';
@@ -149,6 +158,11 @@ export function AppShell({ initialPage }: { initialPage: Page }): JSX.Element {
             {sessions.length === 0 && <p className="hx-side-empty">还没有会话</p>}
           </div>
         </div>
+        {update.ready && (
+          <button type="button" className="nav-update" onClick={installUpdate} disabled={installing} title="安装新版本，桌宠会自动重启（几秒钟）">
+            {installing ? '正在更新，马上回来…' : '⬆ 有新版本 · 点此更新'}
+          </button>
+        )}
         <div className="nav-foot" ref={menuRef} data-open={menu ? '1' : '0'}>
           {menu && (
             <div className="me-menu" role="menu">

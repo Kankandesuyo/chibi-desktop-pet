@@ -100,6 +100,8 @@ export type AiStreamEvent =
   | { type: 'error'; requestId: string; message: string };
 
 export type PanelAction = 'state' | 'toggle-pin' | 'toggle-fullscreen' | 'hide';
+/** A new build staged as resources/app.asar.new, installed from inside the app. */
+export interface UpdateStatus { ready: boolean; stagedAt?: number; error?: string }
 export interface PanelState { pinned: boolean; fullscreen: boolean; maximized: boolean }
 
 export type PetNotice = AiReplyMeta | { talking: boolean } | AgentPetSignal;
@@ -164,6 +166,10 @@ export interface PetAPI {
   userAvatarSet(dataUrl: string | null): Promise<{ ok: boolean; error?: string; settings: Settings }>;
   /** The main process asks the main window to show a page (e.g. "settings"). */
   onNavigate(cb: (page: string) => void): () => void;
+  /** Whether a staged update is waiting, and installing it (the app restarts). */
+  updateStatus(): Promise<UpdateStatus>;
+  updateApply(): Promise<{ ok: boolean; error?: string }>;
+  onUpdate(cb: (s: UpdateStatus) => void): () => void;
   agentOpenFolder(kind: 'logs' | 'plugins' | 'skills' | 'instructions' | 'hooks'): void;
   /** A chat slash command; null when the text is not one (send it as a message instead). */
   agentCommand(text: string): Promise<AgentCommandResult | null>;
